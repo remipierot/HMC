@@ -261,42 +261,7 @@ public :
 					_Chunks[x][y][z]->reset();
 		memset(_MatriceHeights,0x00,MAT_SIZE_CUBES*MAT_SIZE_CUBES*sizeof(int));
 
-		int max_height = rand() % 4;
-
-		//On charge les 4 coins
-		load_pile(
-			0, 
-			0, 
-			((max_height == 0) + (randf() * (max_height != 0))) * MAT_HEIGHT_CUBES,
-			false
-		);
-		load_pile(
-			MAT_SIZE_CUBES - 1, 
-			0, 
-			((max_height == 1) + (randf() * (max_height != 1))) * MAT_HEIGHT_CUBES,
-			false
-		);
-		load_pile(
-			MAT_SIZE_CUBES - 1, 
-			MAT_SIZE_CUBES - 1, 
-			((max_height == 2) + (randf() * (max_height != 2))) * MAT_HEIGHT_CUBES,
-			false
-		);
-		load_pile(
-			0, 
-			MAT_SIZE_CUBES - 1, 
-			((max_height == 3) + (randf() * (max_height != 3))) * MAT_HEIGHT_CUBES,
-			false
-		);
-
-		//On génère a partir des 4 coins
-		generate_piles(
-			0, 0,
-			MAT_SIZE_CUBES-1, 0,
-			MAT_SIZE_CUBES-1, MAT_SIZE_CUBES-1,
-			0, MAT_SIZE_CUBES-1,
-			1, profmax
-		);	
+		diamond_square_generation(profmax);
 
 		for (int i = 0; i < SMOOTH_PASS; i++)
 			lisse();
@@ -340,6 +305,46 @@ public :
 		y = (int)y / NYCube::CUBE_SIZE;
 
 		return (x >= 0 && x < MAT_SIZE_CUBES && y >= 0 && y < MAT_SIZE_CUBES) ? _MatriceHeights[(int)x][(int)y] * NYCube::CUBE_SIZE : 0;
+	}
+
+	void diamond_square_generation(int profmax = -1)
+	{
+		int max_height = rand() % 4;
+
+		//On charge les 4 coins
+		load_pile(
+			0,
+			0,
+			((max_height == 0) + (randf() * (max_height != 0))) * MAT_HEIGHT_CUBES,
+			false
+			);
+		load_pile(
+			MAT_SIZE_CUBES - 1,
+			0,
+			((max_height == 1) + (randf() * (max_height != 1))) * MAT_HEIGHT_CUBES,
+			false
+			);
+		load_pile(
+			MAT_SIZE_CUBES - 1,
+			MAT_SIZE_CUBES - 1,
+			((max_height == 2) + (randf() * (max_height != 2))) * MAT_HEIGHT_CUBES,
+			false
+			);
+		load_pile(
+			0,
+			MAT_SIZE_CUBES - 1,
+			((max_height == 3) + (randf() * (max_height != 3))) * MAT_HEIGHT_CUBES,
+			false
+			);
+
+		//On génère a partir des 4 coins
+		generate_piles(
+			0, 0,
+			MAT_SIZE_CUBES - 1, 0,
+			MAT_SIZE_CUBES - 1, MAT_SIZE_CUBES - 1,
+			0, MAT_SIZE_CUBES - 1,
+			1, profmax
+			);
 	}
 
 	void add_world_to_vbo(void)
