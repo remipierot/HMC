@@ -452,6 +452,13 @@ void keyboardDownFunction(unsigned char key, int p1, int p2)
 		g_world->init_world();
 	}
 
+	if (key == 'r')
+	{
+		g_world->lisse(false);
+		g_world->disableHiddenCubes();
+		g_world->add_world_to_vbo();
+	}
+
 	switch (key)
 	{
 		case 'z':

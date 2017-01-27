@@ -41,15 +41,16 @@ enum Faces
 class NYChunk
 {
 	public :
-
-		static const int CHUNK_SIZE = 16; ///< Taille d'un chunk en nombre de cubes (n*n*n)
-		NYCube _Cubes[CHUNK_SIZE][CHUNK_SIZE][CHUNK_SIZE]; ///< Cubes contenus dans le chunk
+		static const int X_CHUNK_SIZE = 16;
+		static const int Y_CHUNK_SIZE = 16;
+		static const int Z_CHUNK_SIZE = 128;
+		NYCube _Cubes[X_CHUNK_SIZE][Y_CHUNK_SIZE][Z_CHUNK_SIZE]; ///< Cubes contenus dans le chunk
 
 		GLuint _BufWorld; ///< Identifiant du VBO pour le monde
 		
-		static float _WorldVert[CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE*3*4*6]; ///< Buffer pour les sommets
-		static float _WorldCols[CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE*3*4*6]; ///< Buffer pour les couleurs
-		static float _WorldNorm[CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE*3*4*6]; ///< Buffer pour les normales
+		static float _WorldVert[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE*3*4*6]; ///< Buffer pour les sommets
+		static float _WorldCols[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE*3*4*6]; ///< Buffer pour les couleurs
+		static float _WorldNorm[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE*3*4*6]; ///< Buffer pour les normales
 
 		static const int SIZE_VERTICE = 3 * sizeof(float); ///< Taille en octets d'un vertex dans le VBO
 		static const int SIZE_COLOR = 3 * sizeof(float);  ///< Taille d'une couleur dans le VBO
@@ -82,9 +83,9 @@ class NYChunk
 		  */
 		void reset(void)
 		{
-			for(int x=0;x<CHUNK_SIZE;x++)
-				for(int y=0;y<CHUNK_SIZE;y++)
-					for(int z=0;z<CHUNK_SIZE;z++)
+			for(int x=0;x<X_CHUNK_SIZE;x++)
+				for(int y=0;y<Y_CHUNK_SIZE;y++)
+					for(int z=0;z<Z_CHUNK_SIZE;z++)
 					{
 						_Cubes[x][y][z]._Draw = true;
 						_Cubes[x][y][z]._Type = CUBE_AIR;
@@ -101,11 +102,11 @@ class NYChunk
 			float* pointers[] = {_WorldVert, _WorldCols, _WorldNorm};
 			_NbVertices = 0;
 
-			for (int x = 0; x < CHUNK_SIZE; x++)
+			for (int x = 0; x < X_CHUNK_SIZE; x++)
 			{
-				for (int y = 0; y < CHUNK_SIZE; y++)
+				for (int y = 0; y < Y_CHUNK_SIZE; y++)
 				{
-					for (int z = 0; z < CHUNK_SIZE; z++)
+					for (int z = 0; z < Z_CHUNK_SIZE; z++)
 					{
 						c = _Cubes[x][y][z];
 						if (c._Draw && c.isSolid())
@@ -298,33 +299,33 @@ class NYChunk
 			NYCube * cubeZNext = NULL; 
 
 			if(x == 0 && Voisins[0] != NULL)
-				cubeXPrev = &(Voisins[0]->_Cubes[CHUNK_SIZE-1][y][z]);
+				cubeXPrev = &(Voisins[0]->_Cubes[X_CHUNK_SIZE-1][y][z]);
 			else if(x > 0)
 				cubeXPrev = &(_Cubes[x-1][y][z]);
 
-			if(x == CHUNK_SIZE-1 && Voisins[1] != NULL)
+			if(x == X_CHUNK_SIZE-1 && Voisins[1] != NULL)
 				cubeXNext = &(Voisins[1]->_Cubes[0][y][z]);
-			else if(x < CHUNK_SIZE-1)
+			else if(x < X_CHUNK_SIZE-1)
 				cubeXNext = &(_Cubes[x+1][y][z]);
 
 			if(y == 0 && Voisins[2] != NULL)
-				cubeYPrev = &(Voisins[2]->_Cubes[x][CHUNK_SIZE-1][z]);
+				cubeYPrev = &(Voisins[2]->_Cubes[x][Y_CHUNK_SIZE-1][z]);
 			else if(y > 0)
 				cubeYPrev = &(_Cubes[x][y-1][z]);
 
-			if(y == CHUNK_SIZE-1 && Voisins[3] != NULL)
+			if(y == Y_CHUNK_SIZE-1 && Voisins[3] != NULL)
 				cubeYNext = &(Voisins[3]->_Cubes[x][0][z]);
-			else if(y < CHUNK_SIZE-1)
+			else if(y < Y_CHUNK_SIZE-1)
 				cubeYNext = &(_Cubes[x][y+1][z]);
 
 			if(z == 0 && Voisins[4] != NULL)
-				cubeZPrev = &(Voisins[4]->_Cubes[x][y][CHUNK_SIZE-1]);
+				cubeZPrev = &(Voisins[4]->_Cubes[x][y][Z_CHUNK_SIZE-1]);
 			else if(z > 0)
 				cubeZPrev = &(_Cubes[x][y][z-1]);
 
-			if(z == CHUNK_SIZE-1 && Voisins[5] != NULL)
+			if(z == Z_CHUNK_SIZE-1 && Voisins[5] != NULL)
 				cubeZNext = &(Voisins[5]->_Cubes[x][y][0]);
-			else if(z < CHUNK_SIZE-1)
+			else if(z < Z_CHUNK_SIZE-1)
 				cubeZNext = &(_Cubes[x][y][z+1]);
 
 			if( cubeXPrev == NULL || cubeXNext == NULL ||
@@ -344,9 +345,9 @@ class NYChunk
 
 		void disableHiddenCubes(void)
 		{
-			for(int x=0;x<CHUNK_SIZE;x++)
-				for(int y=0;y<CHUNK_SIZE;y++)
-					for(int z=0;z<CHUNK_SIZE;z++)
+			for(int x=0;x<X_CHUNK_SIZE;x++)
+				for(int y=0;y<Y_CHUNK_SIZE;y++)
+					for(int z=0;z<Z_CHUNK_SIZE;z++)
 					{
 						_Cubes[x][y][z]._Draw = true;
 						if(test_hidden(x,y,z))

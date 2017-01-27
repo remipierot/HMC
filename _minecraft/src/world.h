@@ -6,24 +6,27 @@
 #include "engine/utils/types_3d.h"
 #include "cube.h"
 #include "chunk.h"
+#include "OpenSimplexNoise.h"
 
 typedef uint8 NYAxis;
 #define NY_AXIS_X 0x01
 #define NY_AXIS_Y 0x02
 #define NY_AXIS_Z 0x04
 
-#define MAT_SIZE 20 //en nombre de chunks
-#define MAT_HEIGHT 10 //en nombre de chunks
-#define MAT_SIZE_CUBES (MAT_SIZE * NYChunk::CHUNK_SIZE)
-#define MAT_HEIGHT_CUBES (MAT_HEIGHT * NYChunk::CHUNK_SIZE)
-#define SMOOTH_PASS 5
+#define MAT_X_SIZE 20 //en nombre de chunks
+#define MAT_Y_SIZE 20 //en nombre de chunks
+#define MAT_Z_SIZE 1 //en nombre de chunks
+#define MAT_X_SIZE_CUBES (MAT_X_SIZE * NYChunk::X_CHUNK_SIZE)
+#define MAT_Y_SIZE_CUBES (MAT_Y_SIZE * NYChunk::Y_CHUNK_SIZE)
+#define MAT_Z_SIZE_CUBES (MAT_Z_SIZE * NYChunk::Z_CHUNK_SIZE)
+#define SMOOTH_PASS 1
 
 class NYWorld
 {
 public :
-	NYChunk * _Chunks[MAT_SIZE][MAT_SIZE][MAT_HEIGHT];
-	int _MatriceHeights[MAT_SIZE_CUBES][MAT_SIZE_CUBES];
-	int _MatriceHeightsTmp[MAT_SIZE_CUBES][MAT_SIZE_CUBES];
+	NYChunk * _Chunks[MAT_X_SIZE][MAT_Y_SIZE][MAT_Z_SIZE];
+	int _MatriceHeights[MAT_X_SIZE_CUBES][MAT_Y_SIZE_CUBES];
+	int _MatriceHeightsTmp[MAT_X_SIZE_CUBES][MAT_Y_SIZE_CUBES];
 	float _FacteurGeneration;
 
 	NYWorld()
@@ -31,34 +34,34 @@ public :
 		_FacteurGeneration = 300.0f;
 
 		//On crée les chunks
-		for(int x=0;x<MAT_SIZE;x++)
-			for(int y=0;y<MAT_SIZE;y++)
-				for(int z=0;z<MAT_HEIGHT;z++)
+		for (int x = 0; x<MAT_X_SIZE; x++)
+			for (int y = 0; y<MAT_Y_SIZE; y++)
+				for (int z = 0; z<MAT_Z_SIZE; z++)
 					_Chunks[x][y][z] = new NYChunk();
 
-		for(int x=0;x<MAT_SIZE;x++)
-			for(int y=0;y<MAT_SIZE;y++)
-				for(int z=0;z<MAT_HEIGHT;z++)
+		for (int x = 0; x<MAT_X_SIZE; x++)
+			for (int y = 0; y<MAT_Y_SIZE; y++)
+				for (int z = 0; z<MAT_Z_SIZE; z++)
 				{
 					NYChunk * cxPrev = NULL;
 					if(x > 0)
 						cxPrev = _Chunks[x-1][y][z];
 					NYChunk * cxNext = NULL;
-					if(x < MAT_SIZE-1)
+					if(x < MAT_X_SIZE-1)
 						cxNext = _Chunks[x+1][y][z];
 
 					NYChunk * cyPrev = NULL;
 					if(y > 0)
 						cyPrev = _Chunks[x][y-1][z];
 					NYChunk * cyNext = NULL;
-					if(y < MAT_SIZE-1)
+					if(y < MAT_Y_SIZE-1)
 						cyNext = _Chunks[x][y+1][z];
 
 					NYChunk * czPrev = NULL;
 					if(z > 0)
 						czPrev = _Chunks[x][y][z-1];
 					NYChunk * czNext = NULL;
-					if(z < MAT_HEIGHT-1)
+					if(z < MAT_Z_SIZE-1)
 						czNext = _Chunks[x][y][z+1];
 
 					_Chunks[x][y][z]->setVoisins(cxPrev,cxNext,cyPrev,cyNext,czPrev,czNext);
@@ -72,11 +75,11 @@ public :
 		if(x < 0)x = 0;
 		if(y < 0)y = 0;
 		if(z < 0)z = 0;
-		if(x >= MAT_SIZE * NYChunk::CHUNK_SIZE) x = (MAT_SIZE * NYChunk::CHUNK_SIZE)-1;
-		if(y >= MAT_SIZE * NYChunk::CHUNK_SIZE) y = (MAT_SIZE * NYChunk::CHUNK_SIZE)-1;
-		if(z >= MAT_HEIGHT * NYChunk::CHUNK_SIZE) z = (MAT_HEIGHT * NYChunk::CHUNK_SIZE)-1;
+		if(x >= MAT_X_SIZE * NYChunk::X_CHUNK_SIZE) x = (MAT_X_SIZE * NYChunk::X_CHUNK_SIZE)-1;
+		if(y >= MAT_Y_SIZE * NYChunk::Y_CHUNK_SIZE) y = (MAT_Y_SIZE * NYChunk::Y_CHUNK_SIZE)-1;
+		if(z >= MAT_Z_SIZE * NYChunk::Z_CHUNK_SIZE) z = (MAT_Z_SIZE * NYChunk::Z_CHUNK_SIZE)-1;
 
-		return &(_Chunks[x / NYChunk::CHUNK_SIZE][y / NYChunk::CHUNK_SIZE][z / NYChunk::CHUNK_SIZE]->_Cubes[x % NYChunk::CHUNK_SIZE][y % NYChunk::CHUNK_SIZE][z % NYChunk::CHUNK_SIZE]);
+		return &(_Chunks[x / NYChunk::X_CHUNK_SIZE][y / NYChunk::Y_CHUNK_SIZE][z / NYChunk::Z_CHUNK_SIZE]->_Cubes[x % NYChunk::X_CHUNK_SIZE][y % NYChunk::Y_CHUNK_SIZE][z % NYChunk::Z_CHUNK_SIZE]);
 	}
 
 	void updateCube(int x, int y, int z)
@@ -84,10 +87,10 @@ public :
 		if(x < 0)x = 0;
 		if(y < 0)y = 0;
 		if(z < 0)z = 0;
-		if(x >= MAT_SIZE * NYChunk::CHUNK_SIZE)x = (MAT_SIZE * NYChunk::CHUNK_SIZE)-1;
-		if(y >= MAT_SIZE * NYChunk::CHUNK_SIZE)y = (MAT_SIZE * NYChunk::CHUNK_SIZE)-1;
-		if(z >= MAT_HEIGHT * NYChunk::CHUNK_SIZE)z = (MAT_HEIGHT * NYChunk::CHUNK_SIZE)-1;
-		_Chunks[x / NYChunk::CHUNK_SIZE][y / NYChunk::CHUNK_SIZE][z / NYChunk::CHUNK_SIZE]->toVbo();
+		if (x >= MAT_X_SIZE * NYChunk::X_CHUNK_SIZE) x = (MAT_X_SIZE * NYChunk::X_CHUNK_SIZE) - 1;
+		if (y >= MAT_Y_SIZE * NYChunk::Y_CHUNK_SIZE) y = (MAT_Y_SIZE * NYChunk::Y_CHUNK_SIZE) - 1;
+		if (z >= MAT_Z_SIZE * NYChunk::Z_CHUNK_SIZE) z = (MAT_Z_SIZE * NYChunk::Z_CHUNK_SIZE) - 1;
+		_Chunks[x / NYChunk::X_CHUNK_SIZE][y / NYChunk::Y_CHUNK_SIZE][z / NYChunk::Z_CHUNK_SIZE]->toVbo();
 	}
 
 	void deleteCube(int x, int y, int z)
@@ -100,7 +103,7 @@ public :
 
 	//Création d'une pile de cubes
 	//only if zero permet de ne générer la  pile que si sa hauteur actuelle est de 0 (et ainsi de ne pas regénérer de piles existantes)
-	void load_pile(int x, int y, int height, bool onlyIfZero = true)
+	void load_pile(int x, int y, int height, bool reset = true, bool onlyIfZero = true)
 	{
 		if (onlyIfZero && _MatriceHeights[x][y] != 0)
 		{
@@ -109,17 +112,21 @@ public :
 
 		NYCube* c;
 		_MatriceHeights[x][y] = height;
+
 		
-		for (int z = 0; z < MAT_HEIGHT_CUBES; z++)
+		for (int z = 0; z < MAT_Z_SIZE_CUBES; z++)
 		{
 			c = getCube(x, y, z);
-			c->_Type = (z == 0) 
-						? CUBE_EAU 
-						: (z < height - 1) 
-							? CUBE_TERRE 
-							: (z == height - 1) 
-								? CUBE_HERBE
-								: CUBE_AIR;
+			if (reset == true || z >= (height-1))
+			{
+				c->_Type = (z == 0)
+							? CUBE_EAU
+							: (z < height - 1)
+								? CUBE_TERRE
+								: (z == height - 1)
+									? CUBE_HERBE
+									: CUBE_AIR;
+			}
 		}
 	}
 
@@ -208,21 +215,21 @@ public :
 	}
 
 
-	void lisse(void)
+	void lisse(bool reset = true)
 	{
 		int window = 4;
-		memset(_MatriceHeightsTmp, 0x00, sizeof(int)*MAT_SIZE_CUBES*MAT_SIZE_CUBES);
+		memset(_MatriceHeightsTmp, 0x00, sizeof(int)*MAT_X_SIZE_CUBES*MAT_Y_SIZE_CUBES);
 
-		for (int x = 0; x<MAT_SIZE_CUBES; x++)
+		for (int x = 0; x<MAT_X_SIZE_CUBES; x++)
 		{
-			for (int y = 0; y<MAT_SIZE_CUBES; y++)
+			for (int y = 0; y<MAT_Y_SIZE_CUBES; y++)
 			{
 				int count = 0;
 				int win_x_start = max(0, x - window);
-				int win_x_end = min(x + window, MAT_SIZE_CUBES - 1);
+				int win_x_end = min(x + window, MAT_X_SIZE_CUBES - 1);
 				int win_y_start = max(0, y - window);
-				int win_y_end = min(y + window, MAT_SIZE_CUBES - 1);
-
+				int win_y_end = min(y + window, MAT_Y_SIZE_CUBES - 1);
+				
 				for (int i = win_x_start; i < win_x_end; i++)
 				{
 					for (int j = win_y_start; j < win_y_end; j++)
@@ -237,11 +244,11 @@ public :
 		}
 
 		//On reset les piles
-		for (int x = 0; x<MAT_SIZE_CUBES; x++)
+		for (int x = 0; x<MAT_X_SIZE_CUBES; x++)
 		{
-			for (int y = 0; y<MAT_SIZE_CUBES; y++)
+			for (int y = 0; y<MAT_Y_SIZE_CUBES; y++)
 			{
-				load_pile(x, y, _MatriceHeightsTmp[x][y], false);
+				load_pile(x, y, _MatriceHeightsTmp[x][y], reset, false);
 			}
 		}
 	}
@@ -255,23 +262,31 @@ public :
 		randf(); // Needed so that the first randf does not give 0 as an output
 
 		//Reset du monde
-		for(int x=0;x<MAT_SIZE;x++)
-			for(int y=0;y<MAT_SIZE;y++)
-				for(int z=0;z<MAT_HEIGHT;z++)
+		for (int x = 0; x<MAT_X_SIZE; x++)
+			for (int y = 0; y<MAT_Y_SIZE; y++)
+				for (int z = 0; z<MAT_Z_SIZE; z++)
 					_Chunks[x][y][z]->reset();
-		memset(_MatriceHeights,0x00,MAT_SIZE_CUBES*MAT_SIZE_CUBES*sizeof(int));
+		memset(_MatriceHeights,0x00,MAT_X_SIZE_CUBES*MAT_Y_SIZE_CUBES*sizeof(int));
 
-		diamond_square_generation(profmax);
+		//diamond_square_generation(profmax);
+		perlin_generation();
 
+		/*
 		for (int i = 0; i < SMOOTH_PASS; i++)
 			lisse();
+			*/
 
-		for(int x=0;x<MAT_SIZE;x++)
-			for(int y=0;y<MAT_SIZE;y++)
-				for (int z = 0; z < MAT_HEIGHT; z++)
-					_Chunks[x][y][z]->disableHiddenCubes();
+		disableHiddenCubes();
 
 		add_world_to_vbo();
+	}
+
+	void disableHiddenCubes() 
+	{
+		for (int x = 0; x<MAT_X_SIZE; x++)
+			for (int y = 0; y<MAT_Y_SIZE; y++)
+				for (int z = 0; z<MAT_Z_SIZE; z++)
+					_Chunks[x][y][z]->disableHiddenCubes();
 	}
 
 	NYCube * pick(NYVert3Df  pos, NYVert3Df  dir, NYPoint3D * point)
@@ -288,12 +303,12 @@ public :
 
 	void render_world_vbo(void)
 	{
-		for(int x=0;x<MAT_SIZE;x++)
-			for(int y=0;y<MAT_SIZE;y++)
-				for(int z=0;z<MAT_HEIGHT;z++)
+		for (int x = 0; x<MAT_X_SIZE; x++)
+			for (int y = 0; y<MAT_Y_SIZE; y++)
+				for (int z = 0; z<MAT_Z_SIZE; z++)
 				{
 					glPushMatrix();
-					glTranslatef((float)(x*NYChunk::CHUNK_SIZE*NYCube::CUBE_SIZE),(float)(y*NYChunk::CHUNK_SIZE*NYCube::CUBE_SIZE),(float)(z*NYChunk::CHUNK_SIZE*NYCube::CUBE_SIZE));
+					glTranslatef((float)(x*NYChunk::X_CHUNK_SIZE*NYCube::CUBE_SIZE),(float)(y*NYChunk::Y_CHUNK_SIZE*NYCube::CUBE_SIZE),(float)(z*NYChunk::Z_CHUNK_SIZE*NYCube::CUBE_SIZE));
 					_Chunks[x][y][z]->render();
 					glPopMatrix();
 				}
@@ -304,7 +319,49 @@ public :
 		x = (int)x / NYCube::CUBE_SIZE;
 		y = (int)y / NYCube::CUBE_SIZE;
 
-		return (x >= 0 && x < MAT_SIZE_CUBES && y >= 0 && y < MAT_SIZE_CUBES) ? _MatriceHeights[(int)x][(int)y] * NYCube::CUBE_SIZE : 0;
+		return (x >= 0 && x < MAT_X_SIZE_CUBES && y >= 0 && y < MAT_Y_SIZE_CUBES) ? _MatriceHeights[(int)x][(int)y] * NYCube::CUBE_SIZE : 0;
+	}
+
+	void perlin_generation() 
+	{
+		NYCube* c;
+		float tmp_noise;
+		
+		OpenSimplexNoise::init(NYRenderer::_DeltaTimeCumul);
+
+		for (int z = 0; z < MAT_Z_SIZE_CUBES; z++)
+		{
+			for (int y = 0; y < MAT_Y_SIZE_CUBES; y++)
+			{
+				for (int x = 0; x < MAT_X_SIZE_CUBES; x++)
+				{
+					c = getCube(x, y, z);
+					tmp_noise = OpenSimplexNoise::eval(x / 16.0f, y / 16.0f, z / 16.0f);
+					
+					c->_Type = (tmp_noise < 0) ? CUBE_AIR : CUBE_TERRE;
+
+					if (c->_Type == CUBE_TERRE)
+					{
+						_MatriceHeights[x][y] = z;
+					}
+					if (z == 0 && c->_Type == CUBE_AIR)
+					{
+						c->_Type = CUBE_EAU;
+					}
+				}
+			}
+		}
+
+		for (int x = 0; x < MAT_X_SIZE_CUBES; x++)
+		{
+			for (int y = 0; y < MAT_Y_SIZE_CUBES; y++)
+			{
+				int z = _MatriceHeights[x][y];
+				c = getCube(x, y, z);
+
+				c->_Type = (z == 0) ? CUBE_EAU : CUBE_HERBE;
+			}
+		}
 	}
 
 	void diamond_square_generation(int profmax = -1)
@@ -315,34 +372,30 @@ public :
 		load_pile(
 			0,
 			0,
-			((max_height == 0) + (randf() * (max_height != 0))) * MAT_HEIGHT_CUBES,
-			false
+			((max_height == 0) + (randf() * (max_height != 0))) * MAT_Z_SIZE_CUBES
 			);
 		load_pile(
-			MAT_SIZE_CUBES - 1,
+			MAT_X_SIZE_CUBES - 1,
 			0,
-			((max_height == 1) + (randf() * (max_height != 1))) * MAT_HEIGHT_CUBES,
-			false
+			((max_height == 1) + (randf() * (max_height != 1))) * MAT_Z_SIZE_CUBES
 			);
 		load_pile(
-			MAT_SIZE_CUBES - 1,
-			MAT_SIZE_CUBES - 1,
-			((max_height == 2) + (randf() * (max_height != 2))) * MAT_HEIGHT_CUBES,
-			false
+			MAT_X_SIZE_CUBES - 1,
+			MAT_Y_SIZE_CUBES - 1,
+			((max_height == 2) + (randf() * (max_height != 2))) * MAT_Z_SIZE_CUBES
 			);
 		load_pile(
 			0,
-			MAT_SIZE_CUBES - 1,
-			((max_height == 3) + (randf() * (max_height != 3))) * MAT_HEIGHT_CUBES,
-			false
+			MAT_Y_SIZE_CUBES - 1,
+			((max_height == 3) + (randf() * (max_height != 3))) * MAT_Z_SIZE_CUBES
 			);
 
 		//On génère a partir des 4 coins
 		generate_piles(
 			0, 0,
-			MAT_SIZE_CUBES - 1, 0,
-			MAT_SIZE_CUBES - 1, MAT_SIZE_CUBES - 1,
-			0, MAT_SIZE_CUBES - 1,
+			MAT_X_SIZE_CUBES - 1, 0,
+			MAT_X_SIZE_CUBES - 1, MAT_Y_SIZE_CUBES - 1,
+			0, MAT_Y_SIZE_CUBES - 1,
 			1, profmax
 			);
 	}
@@ -351,9 +404,9 @@ public :
 	{
 		int totalNbVertices = 0;
 
-		for(int x=0;x<MAT_SIZE;x++)
-			for(int y=0;y<MAT_SIZE;y++)
-				for(int z=0;z<MAT_HEIGHT;z++)
+		for (int x = 0; x<MAT_X_SIZE; x++)
+			for (int y = 0; y<MAT_Y_SIZE; y++)
+				for (int z = 0; z<MAT_Z_SIZE; z++)
 				{
 					_Chunks[x][y][z]->toVbo();
 					totalNbVertices += _Chunks[x][y][z]->_NbVertices;
@@ -380,10 +433,10 @@ public :
 		glMaterialfv(GL_FRONT, GL_SPECULAR, whiteSpecularMaterial);
 		glMaterialf(GL_FRONT, GL_SHININESS, mShininess);
 
-		for (int x = 0; x < MAT_SIZE_CUBES; x++)
+		for (int x = 0; x < MAT_X_SIZE_CUBES; x++)
 		{
 			glPushMatrix();
-			for (int y = 0; y < MAT_SIZE_CUBES; y++)
+			for (int y = 0; y < MAT_Y_SIZE_CUBES; y++)
 			{
 				glPushMatrix();
 				for (int z = 0; z < _MatriceHeights[x][y]; z++)
@@ -424,7 +477,5 @@ public :
 		}
 	}
 };
-
-
 
 #endif
