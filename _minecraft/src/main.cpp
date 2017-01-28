@@ -81,6 +81,8 @@ GUILabel * LabelCamPos = NULL;
 GUILabel * LabelCamForward = NULL;
 GUILabel * LabelCamRight = NULL;
 GUILabel * LabelCamUp = NULL;
+GUILabel * LabelFullScreen = NULL;
+GUILabel * LabelMouseCapture = NULL;
 GUILabel * LabelReset = NULL;
 GUILabel * LabelSmooth = NULL;
 GUIScreen * g_screen_params = NULL;
@@ -423,43 +425,8 @@ void specialUpFunction(int key, int p1, int p2)
 
 void keyboardDownFunction(unsigned char key, int p1, int p2)
 {
-	if(key == VK_ESCAPE)
-	{
-		glutDestroyWindow(g_main_window_id);	
-		exit(0);
-	}
-
-	if(key == 'f')
-	{
-		int screen_width = 800;
-		int screen_height = 600;
-
-		if(!g_fullscreen){
-			glutFullScreen();
-			g_fullscreen = true;
-		} else if(g_fullscreen){
-			glutLeaveGameMode();
-			glutLeaveFullScreen();
-			glutReshapeWindow(screen_width, screen_height);
-			glutPositionWindow(
-				(GetSystemMetrics(SM_CXSCREEN) - screen_width) / 2.0f, 
-				(GetSystemMetrics(SM_CYSCREEN) - screen_height) / 2.0f
-			);
-			g_fullscreen = false;
-		}
-	}
-
-	if (key == 'r')
-	{
-		g_world->init_world();
-	}
-
-	if (key == 't')
-	{
-		g_world->lisse(false);
-		g_world->disableHiddenCubes();
-		g_world->add_world_to_vbo();
-	}
+	int screen_width = 800;
+	int screen_height = 600;
 
 	switch (key)
 	{
@@ -475,10 +442,39 @@ void keyboardDownFunction(unsigned char key, int p1, int p2)
 		case 'd':
 			kb_inputs[D_KEY] = true;
 			break;
+		case 'f':
+			if (!g_fullscreen) {
+				glutFullScreen();
+				g_fullscreen = true;
+			}
+			else if (g_fullscreen) {
+				glutLeaveGameMode();
+				glutLeaveFullScreen();
+				glutReshapeWindow(screen_width, screen_height);
+				glutPositionWindow(
+					(GetSystemMetrics(SM_CXSCREEN) - screen_width) / 2.0f,
+					(GetSystemMetrics(SM_CYSCREEN) - screen_height) / 2.0f
+					);
+				g_fullscreen = false;
+			}
+			break;
+		case 'r':
+			g_world->init_world();
+			break;
+		case 't':
+			g_world->lisse(false);
+			g_world->disableHiddenCubes();
+			g_world->add_world_to_vbo();
+			break;
 		case 'c':
 			capture_mouse = !capture_mouse;
 			glutSetCursor((GLUT_CURSOR_NONE * capture_mouse) + (GLUT_CURSOR_LEFT_ARROW * !capture_mouse));
 			break;
+		case VK_ESCAPE:
+			glutDestroyWindow(g_main_window_id);
+			exit(0);
+			break;
+
 	}
 }
 
@@ -703,10 +699,26 @@ int main(int argc, char* argv[])
 	LabelFps->ColorBorder = NYColor(0, 0, 0, 1);
 	g_screen_jeu->addElement(LabelFps);
 
+	LabelFullScreen = new GUILabel();
+	LabelFullScreen->Text = "F to enable/disable fullscreen mode";
+	LabelFullScreen->X = x;
+	LabelFullScreen->Y = y + 10;
+	LabelFullScreen->Visible = true;
+	LabelFullScreen->ColorBorder = NYColor(0, 0, 0, 1);
+	g_screen_jeu->addElement(LabelFullScreen);
+
+	LabelMouseCapture = new GUILabel();
+	LabelMouseCapture->Text = "C to enable/disable mouse capture";
+	LabelMouseCapture->X = x;
+	LabelMouseCapture->Y = y + 20;
+	LabelMouseCapture->Visible = true;
+	LabelMouseCapture->ColorBorder = NYColor(0, 0, 0, 1);
+	g_screen_jeu->addElement(LabelMouseCapture);
+
 	LabelReset = new GUILabel();
 	LabelReset->Text = "R to reset the world";
 	LabelReset->X = x;
-	LabelReset->Y = y + 10;
+	LabelReset->Y = y + 30;
 	LabelReset->Visible = true;
 	LabelReset->ColorBorder = NYColor(0, 0, 0, 1);
 	g_screen_jeu->addElement(LabelReset);
@@ -714,7 +726,7 @@ int main(int argc, char* argv[])
 	LabelSmooth = new GUILabel();
 	LabelSmooth->Text = "T to smoothen the world";
 	LabelSmooth->X = x;
-	LabelSmooth->Y = y + 20;
+	LabelSmooth->Y = y + 40;
 	LabelSmooth->Visible = true;
 	LabelSmooth->ColorBorder = NYColor(0, 0, 0, 1);
 	g_screen_jeu->addElement(LabelSmooth);
