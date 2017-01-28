@@ -113,11 +113,10 @@ public :
 		NYCube* c;
 		_MatriceHeights[x][y] = height;
 
-		
 		for (int z = 0; z < MAT_Z_SIZE_CUBES; z++)
 		{
 			c = getCube(x, y, z);
-			if (reset == true || z >= (height-1))
+			if (reset == true)
 			{
 				c->_Type = (z == 0)
 							? CUBE_EAU
@@ -126,6 +125,24 @@ public :
 								: (z == height - 1)
 									? CUBE_HERBE
 									: CUBE_AIR;
+			}
+			else
+			{
+				if (c->_Type == CUBE_TERRE)
+				{
+					_MatriceHeights[x][y] = z;
+				}
+			}
+		}
+
+		if (reset == false)
+		{
+			for (int z = _MatriceHeights[x][y]; z < MAT_Z_SIZE_CUBES; z++)
+			{
+				c = getCube(x, y, z);
+				c->_Type = (z == _MatriceHeights[x][y])
+							? CUBE_HERBE
+							: CUBE_AIR;
 			}
 		}
 	}
@@ -336,7 +353,7 @@ public :
 				for (int x = 0; x < MAT_X_SIZE_CUBES; x++)
 				{
 					c = getCube(x, y, z);
-					tmp_noise = OpenSimplexNoise::eval(x / 16.0f, y / 16.0f, z / 16.0f);
+					tmp_noise = OpenSimplexNoise::eval(x / (float)NYChunk::X_CHUNK_SIZE, y / (float)NYChunk::Y_CHUNK_SIZE, z / (float)NYChunk::Z_CHUNK_SIZE);
 					
 					c->_Type = (tmp_noise < 0) ? CUBE_AIR : CUBE_TERRE;
 

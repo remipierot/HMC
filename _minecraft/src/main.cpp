@@ -81,6 +81,8 @@ GUILabel * LabelCamPos = NULL;
 GUILabel * LabelCamForward = NULL;
 GUILabel * LabelCamRight = NULL;
 GUILabel * LabelCamUp = NULL;
+GUILabel * LabelReset = NULL;
+GUILabel * LabelSmooth = NULL;
 GUIScreen * g_screen_params = NULL;
 GUIScreen * g_screen_jeu = NULL;
 GUISlider * g_slider;
@@ -447,12 +449,12 @@ void keyboardDownFunction(unsigned char key, int p1, int p2)
 		}
 	}
 
-	if (key == 't')
+	if (key == 'r')
 	{
 		g_world->init_world();
 	}
 
-	if (key == 'r')
+	if (key == 't')
 	{
 		g_world->lisse(false);
 		g_world->disableHiddenCubes();
@@ -698,7 +700,24 @@ int main(int argc, char* argv[])
 	LabelFps->X = x;
 	LabelFps->Y = y;
 	LabelFps->Visible = true;
+	LabelFps->ColorBorder = NYColor(0, 0, 0, 1);
 	g_screen_jeu->addElement(LabelFps);
+
+	LabelReset = new GUILabel();
+	LabelReset->Text = "R to reset the world";
+	LabelReset->X = x;
+	LabelReset->Y = y + 10;
+	LabelReset->Visible = true;
+	LabelReset->ColorBorder = NYColor(0, 0, 0, 1);
+	g_screen_jeu->addElement(LabelReset);
+
+	LabelSmooth = new GUILabel();
+	LabelSmooth->Text = "T to smoothen the world";
+	LabelSmooth->X = x;
+	LabelSmooth->Y = y + 20;
+	LabelSmooth->Visible = true;
+	LabelSmooth->ColorBorder = NYColor(0, 0, 0, 1);
+	g_screen_jeu->addElement(LabelSmooth);
 
 	//Ecran de parametrage
 	/*
