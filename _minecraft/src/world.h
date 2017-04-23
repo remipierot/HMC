@@ -7,15 +7,16 @@
 #include "cube.h"
 #include "chunk.h"
 #include "OpenSimplexNoise.h"
+#include "my_physics.h"
 
 typedef uint8 NYAxis;
 #define NY_AXIS_X 0x01
 #define NY_AXIS_Y 0x02
 #define NY_AXIS_Z 0x04
 
-#define MAT_X_SIZE 20 //en nombre de chunks
-#define MAT_Y_SIZE 20 //en nombre de chunks
-#define MAT_Z_SIZE 1 //en nombre de chunks
+#define MAT_X_SIZE 16 //en nombre de chunks
+#define MAT_Y_SIZE 16 //en nombre de chunks
+#define MAT_Z_SIZE 4 //en nombre de chunks
 #define MAT_X_SIZE_CUBES (MAT_X_SIZE * NYChunk::X_CHUNK_SIZE)
 #define MAT_Y_SIZE_CUBES (MAT_Y_SIZE * NYChunk::Y_CHUNK_SIZE)
 #define MAT_Z_SIZE_CUBES (MAT_Z_SIZE * NYChunk::Z_CHUNK_SIZE)
@@ -285,13 +286,11 @@ public :
 					_Chunks[x][y][z]->reset();
 		memset(_MatriceHeights,0x00,MAT_X_SIZE_CUBES*MAT_Y_SIZE_CUBES*sizeof(int));
 
-		//diamond_square_generation(profmax);
-		perlin_generation();
+		diamond_square_generation(profmax);
+		//perlin_generation();
 
-		/*
 		for (int i = 0; i < SMOOTH_PASS; i++)
 			lisse();
-			*/
 
 		disableHiddenCubes();
 
@@ -309,13 +308,6 @@ public :
 	NYCube * pick(NYVert3Df  pos, NYVert3Df  dir, NYPoint3D * point)
 	{
 		return NULL;
-	}
-
-	//Boites de collisions plus petites que deux cubes
-	NYAxis getMinCol(NYVert3Df pos, float width, float height, float & valueColMin, int i)
-	{
-		NYAxis axis = 0x00;
-		return axis;
 	}
 
 	void render_world_vbo(void)
@@ -492,6 +484,467 @@ public :
 			glPopMatrix();
 			//glTranslatef(5, 0, 0);
 		}
+	}
+
+	//Boites de collisions plus petites que deux cubes
+	NYAxis getMinCol(NYVert3Df pos, NYVert3Df dir, float width, float height, float & valueColMin, bool oneShot)
+	{
+		int x = (int)(pos.X / NYCube::CUBE_SIZE);
+		int y = (int)(pos.Y / NYCube::CUBE_SIZE);
+		int z = (int)(pos.Z / NYCube::CUBE_SIZE);
+
+		int xNext = (int)((pos.X + width / 2.0f) / NYCube::CUBE_SIZE);
+		int yNext = (int)((pos.Y + width / 2.0f) / NYCube::CUBE_SIZE);
+		int zNext = (int)((pos.Z + height / 2.0f) / NYCube::CUBE_SIZE);
+
+		int xPrev = (int)((pos.X - width / 2.0f) / NYCube::CUBE_SIZE);
+		int yPrev = (int)((pos.Y - width / 2.0f) / NYCube::CUBE_SIZE);
+		int zPrev = (int)((pos.Z - height / 2.0f) / NYCube::CUBE_SIZE);
+
+		if (x < 0)	x = 0;
+		if (y < 0)	y = 0;
+		if (z < 0)	z = 0;
+
+		if (xPrev < 0)	xPrev = 0;
+		if (yPrev < 0)	yPrev = 0;
+		if (zPrev < 0)	zPrev = 0;
+
+		if (xNext < 0)	xNext = 0;
+		if (yNext < 0)	yNext = 0;
+		if (zNext < 0)	zNext = 0;
+
+		if (x >= MAT_X_SIZE_CUBES)	x = MAT_X_SIZE_CUBES - 1;
+		if (y >= MAT_Y_SIZE_CUBES)	y = MAT_Y_SIZE_CUBES - 1;
+		if (z >= MAT_Z_SIZE_CUBES)	z = MAT_Z_SIZE_CUBES - 1;
+
+		if (xPrev >= MAT_X_SIZE_CUBES)	xPrev = MAT_X_SIZE_CUBES - 1;
+		if (yPrev >= MAT_Y_SIZE_CUBES)	yPrev = MAT_Y_SIZE_CUBES - 1;
+		if (zPrev >= MAT_Z_SIZE_CUBES)	zPrev = MAT_Z_SIZE_CUBES - 1;
+
+		if (xNext >= MAT_X_SIZE_CUBES)	xNext = MAT_X_SIZE_CUBES - 1;
+		if (yNext >= MAT_Y_SIZE_CUBES)	yNext = MAT_Y_SIZE_CUBES - 1;
+		if (zNext >= MAT_Z_SIZE_CUBES)	zNext = MAT_Z_SIZE_CUBES - 1;
+
+		//On fait chaque axe
+		NYAxis axis = 0x00;
+		valueColMin = oneShot ? 0.5 : 10000.0f;
+		float seuil = 0.00001;
+		float prodScalMin = 1.0f;
+		if (dir.getMagnitude() > 1)
+			dir.normalize();
+
+		//On verif tout les 4 angles de gauche
+		if (getCube(xPrev, yPrev, zPrev)->isSolid() ||
+			getCube(xPrev, yPrev, zNext)->isSolid() ||
+			getCube(xPrev, yNext, zPrev)->isSolid() ||
+			getCube(xPrev, yNext, zNext)->isSolid())
+		{
+			//On verif que resoudre cette collision est utile
+			if (!(getCube(xPrev + 1, yPrev, zPrev)->isSolid() ||
+				getCube(xPrev + 1, yPrev, zNext)->isSolid() ||
+				getCube(xPrev + 1, yNext, zPrev)->isSolid() ||
+				getCube(xPrev + 1, yNext, zNext)->isSolid()) || !oneShot)
+			{
+				float depassement = ((xPrev + 1) * NYCube::CUBE_SIZE) - (pos.X - width / 2.0f);
+				float prodScal = abs(dir.X);
+				if (abs(depassement) > seuil)
+					if (abs(depassement) < abs(valueColMin))
+					{
+						prodScalMin = prodScal;
+						valueColMin = depassement;
+						axis = NY_AXIS_X;
+					}
+			}
+		}
+
+		//float depassementx2 = (xNext * NYCube::CUBE_SIZE) - (pos.X + width / 2.0f);
+
+		//On verif tout les 4 angles de droite
+		if (getCube(xNext, yPrev, zPrev)->isSolid() ||
+			getCube(xNext, yPrev, zNext)->isSolid() ||
+			getCube(xNext, yNext, zPrev)->isSolid() ||
+			getCube(xNext, yNext, zNext)->isSolid())
+		{
+			//On verif que resoudre cette collision est utile
+			if (!(getCube(xNext - 1, yPrev, zPrev)->isSolid() ||
+				getCube(xNext - 1, yPrev, zNext)->isSolid() ||
+				getCube(xNext - 1, yNext, zPrev)->isSolid() ||
+				getCube(xNext - 1, yNext, zNext)->isSolid()) || !oneShot)
+			{
+				float depassement = (xNext * NYCube::CUBE_SIZE) - (pos.X + width / 2.0f);
+				float prodScal = abs(dir.X);
+				if (abs(depassement) > seuil)
+					if (abs(depassement) < abs(valueColMin))
+					{
+						prodScalMin = prodScal;
+						valueColMin = depassement;
+						axis = NY_AXIS_X;
+					}
+			}
+		}
+
+		//float depassementy1 = (yNext * NYCube::CUBE_SIZE) - (pos.Y + width / 2.0f);
+
+		//On verif tout les 4 angles de devant
+		if (getCube(xPrev, yNext, zPrev)->isSolid() ||
+			getCube(xPrev, yNext, zNext)->isSolid() ||
+			getCube(xNext, yNext, zPrev)->isSolid() ||
+			getCube(xNext, yNext, zNext)->isSolid())
+		{
+			//On verif que resoudre cette collision est utile
+			if (!(getCube(xPrev, yNext - 1, zPrev)->isSolid() ||
+				getCube(xPrev, yNext - 1, zNext)->isSolid() ||
+				getCube(xNext, yNext - 1, zPrev)->isSolid() ||
+				getCube(xNext, yNext - 1, zNext)->isSolid()) || !oneShot)
+			{
+				float depassement = (yNext * NYCube::CUBE_SIZE) - (pos.Y + width / 2.0f);
+				float prodScal = abs(dir.Y);
+				if (abs(depassement) > seuil)
+					if (abs(depassement) < abs(valueColMin))
+					{
+						prodScalMin = prodScal;
+						valueColMin = depassement;
+						axis = NY_AXIS_Y;
+					}
+			}
+		}
+
+		//float depassementy2 = ((yPrev + 1) * NYCube::CUBE_SIZE) - (pos.Y - width / 2.0f);
+
+		//On verif tout les 4 angles de derriere
+		if (getCube(xPrev, yPrev, zPrev)->isSolid() ||
+			getCube(xPrev, yPrev, zNext)->isSolid() ||
+			getCube(xNext, yPrev, zPrev)->isSolid() ||
+			getCube(xNext, yPrev, zNext)->isSolid())
+		{
+			//On verif que resoudre cette collision est utile
+			if (!(getCube(xPrev, yPrev + 1, zPrev)->isSolid() ||
+				getCube(xPrev, yPrev + 1, zNext)->isSolid() ||
+				getCube(xNext, yPrev + 1, zPrev)->isSolid() ||
+				getCube(xNext, yPrev + 1, zNext)->isSolid()) || !oneShot)
+			{
+				float depassement = ((yPrev + 1) * NYCube::CUBE_SIZE) - (pos.Y - width / 2.0f);
+				float prodScal = abs(dir.Y);
+				if (abs(depassement) > seuil)
+					if (abs(depassement) < abs(valueColMin))
+					{
+						prodScalMin = prodScal;
+						valueColMin = depassement;
+						axis = NY_AXIS_Y;
+					}
+			}
+		}
+
+		//On verif tout les 4 angles du haut
+		if (getCube(xPrev, yPrev, zNext)->isSolid() ||
+			getCube(xPrev, yNext, zNext)->isSolid() ||
+			getCube(xNext, yPrev, zNext)->isSolid() ||
+			getCube(xNext, yNext, zNext)->isSolid())
+		{
+			//On verif que resoudre cette collision est utile
+			if (!(getCube(xPrev, yPrev, zNext - 1)->isSolid() ||
+				getCube(xPrev, yNext, zNext - 1)->isSolid() ||
+				getCube(xNext, yPrev, zNext - 1)->isSolid() ||
+				getCube(xNext, yNext, zNext - 1)->isSolid()) || !oneShot)
+			{
+				float depassement = (zNext * NYCube::CUBE_SIZE) - (pos.Z + height / 2.0f);
+				float prodScal = abs(dir.Z);
+				if (abs(depassement) > seuil)
+					if (abs(depassement) < abs(valueColMin))
+					{
+						prodScalMin = prodScal;
+						valueColMin = depassement;
+						axis = NY_AXIS_Z;
+					}
+			}
+		}
+
+		//On verif tout les 4 angles du bas
+		if (getCube(xPrev, yPrev, zPrev)->isSolid() ||
+			getCube(xPrev, yNext, zPrev)->isSolid() ||
+			getCube(xNext, yPrev, zPrev)->isSolid() ||
+			getCube(xNext, yNext, zPrev)->isSolid())
+		{
+			//On verif que resoudre cette collision est utile
+			if (!(getCube(xPrev, yPrev, zPrev + 1)->isSolid() ||
+				getCube(xPrev, yNext, zPrev + 1)->isSolid() ||
+				getCube(xNext, yPrev, zPrev + 1)->isSolid() ||
+				getCube(xNext, yNext, zPrev + 1)->isSolid()) || !oneShot)
+			{
+				float depassement = ((zPrev + 1) * NYCube::CUBE_SIZE) - (pos.Z - height / 2.0f);
+				float prodScal = abs(dir.Z);
+				if (abs(depassement) > seuil)
+					if (abs(depassement) < abs(valueColMin))
+					{
+						prodScalMin = prodScal;
+						valueColMin = depassement;
+						axis = NY_AXIS_Z;
+					}
+			}
+		}
+
+		return axis;
+	}
+
+	bool getRayCollision(NYVert3Df & debSegment, NYVert3Df & finSegment,
+		NYVert3Df & inter,
+		int &xCube, int&yCube, int&zCube)
+	{
+		float len = (finSegment - debSegment).getSize();
+
+		int x = (int)(debSegment.X / NYCube::CUBE_SIZE);
+		int y = (int)(debSegment.Y / NYCube::CUBE_SIZE);
+		int z = (int)(debSegment.Z / NYCube::CUBE_SIZE);
+
+		int l = (int)(len / NYCube::CUBE_SIZE) + 1;
+
+		int xDeb = x - l;
+		int yDeb = y - l;
+		int zDeb = z - l;
+
+		int xFin = x + l;
+		int yFin = y + l;
+		int zFin = z + l;
+
+		if (xDeb < 0)
+			xDeb = 0;
+		if (yDeb < 0)
+			yDeb = 0;
+		if (zDeb < 0)
+			zDeb = 0;
+
+		if (xFin >= MAT_X_SIZE_CUBES)
+			xFin = MAT_X_SIZE_CUBES - 1;
+		if (yFin >= MAT_Y_SIZE_CUBES)
+			yFin = MAT_Y_SIZE_CUBES - 1;
+		if (zFin >= MAT_Z_SIZE_CUBES)
+			zFin = MAT_Z_SIZE_CUBES - 1;
+
+		float minDist = -1;
+		NYVert3Df interTmp;
+		for (x = xDeb; x <= xFin; x++)
+			for (y = yDeb; y <= yFin; y++)
+				for (z = zDeb; z <= zFin; z++)
+				{
+					if (getCube(x, y, z)->isSolid())
+					{
+						if (getRayCollisionWithCube(debSegment, finSegment, x, y, z, interTmp))
+						{
+							if ((debSegment - interTmp).getMagnitude() < minDist || minDist == -1)
+							{
+								minDist = (debSegment - interTmp).getMagnitude();
+								inter = interTmp;
+								xCube = x;
+								yCube = y;
+								zCube = z;
+
+							}
+						}
+					}
+				}
+
+		if (minDist != -1)
+			return true;
+
+		return false;
+
+	}
+
+	/**
+	* De meme cette fonction peut être grandement opitimisée, on a priviligié la clarté
+	*/
+	bool getRayCollisionWithCube(NYVert3Df & debSegment, NYVert3Df & finSegment,
+		int x, int y, int z,
+		NYVert3Df & inter)
+	{
+		float minDist = -1;
+		NYVert3Df interTemp;
+
+		//Face1
+		if (intersecDroiteCubeFace(debSegment, finSegment,
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			interTemp))
+		{
+			if ((interTemp - debSegment).getMagnitude() < minDist || minDist == -1)
+			{
+				minDist = (interTemp - debSegment).getMagnitude();
+				inter = interTemp;
+			}
+		}
+
+		//Face2
+		if (intersecDroiteCubeFace(debSegment, finSegment,
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			interTemp))
+		{
+			if ((interTemp - debSegment).getMagnitude() < minDist || minDist == -1)
+			{
+				minDist = (interTemp - debSegment).getMagnitude();
+				inter = interTemp;
+			}
+		}
+
+		//Face3
+		if (intersecDroiteCubeFace(debSegment, finSegment,
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			interTemp))
+		{
+			if ((interTemp - debSegment).getMagnitude() < minDist || minDist == -1)
+			{
+				minDist = (interTemp - debSegment).getMagnitude();
+				inter = interTemp;
+			}
+		}
+
+		//Face4
+		if (intersecDroiteCubeFace(debSegment, finSegment,
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			interTemp))
+		{
+			if ((interTemp - debSegment).getMagnitude() < minDist || minDist == -1)
+			{
+				minDist = (interTemp - debSegment).getMagnitude();
+				inter = interTemp;
+			}
+		}
+
+		//Face5
+		if (intersecDroiteCubeFace(debSegment, finSegment,
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 0)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			interTemp))
+		{
+			if ((interTemp - debSegment).getMagnitude() < minDist || minDist == -1)
+			{
+				minDist = (interTemp - debSegment).getMagnitude();
+				inter = interTemp;
+			}
+		}
+
+		//Face6
+		if (intersecDroiteCubeFace(debSegment, finSegment,
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 0)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 1)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			NYVert3Df((x + 1)*NYCube::CUBE_SIZE, (y + 0)*NYCube::CUBE_SIZE, (z + 1)*NYCube::CUBE_SIZE),
+			interTemp))
+		{
+			if ((interTemp - debSegment).getMagnitude() < minDist || minDist == -1)
+			{
+				minDist = (interTemp - debSegment).getMagnitude();
+				inter = interTemp;
+			}
+		}
+
+
+		if (minDist < 0)
+			return false;
+
+		return true;
+	}
+
+	bool cubeIntersect(NYVert3Df& start, NYVert3Df& end, NYVert3Df& intersect)
+	{
+		NYVert3Df cubePos = NYVert3Df(0, 0, 0);
+		int cubeResolution = (int)((end - start).getSize() / NYCube::CUBE_SIZE);
+
+		for (int x = -(cubeResolution / 2); x < (cubeResolution / 2); x++)
+		{
+			for (int y = -(cubeResolution / 2); y < (cubeResolution / 2); y++)
+			{
+				for (int z = -(cubeResolution / 2); z < (cubeResolution / 2); z++)
+				{
+					cubePos.X = (((int)start.X / NYCube::CUBE_SIZE) * NYCube::CUBE_SIZE) + x * NYCube::CUBE_SIZE;
+					cubePos.Y = (((int)start.Y / NYCube::CUBE_SIZE) * NYCube::CUBE_SIZE) + y * NYCube::CUBE_SIZE;
+					cubePos.Z = (((int)start.Z / NYCube::CUBE_SIZE) * NYCube::CUBE_SIZE) + z * NYCube::CUBE_SIZE;
+
+					if (getCube(cubePos.X, cubePos.Y, cubePos.Z)->isSolid())
+					{
+						NYVert3Df A = cubePos;
+						NYVert3Df B = cubePos + NYVert3Df(NYCube::CUBE_SIZE, 0, 0);
+						NYVert3Df C = cubePos + NYVert3Df(NYCube::CUBE_SIZE, 0, NYCube::CUBE_SIZE);
+						NYVert3Df D = cubePos + NYVert3Df(0, 0, NYCube::CUBE_SIZE);
+						NYVert3Df E = cubePos + NYVert3Df(0, NYCube::CUBE_SIZE, NYCube::CUBE_SIZE);
+						NYVert3Df F = cubePos + NYVert3Df(0, NYCube::CUBE_SIZE, 0);
+						NYVert3Df G = cubePos + NYVert3Df(NYCube::CUBE_SIZE, NYCube::CUBE_SIZE, 0);
+						NYVert3Df H = cubePos + NYVert3Df(NYCube::CUBE_SIZE, NYCube::CUBE_SIZE, NYCube::CUBE_SIZE);
+
+						NYVert3Df tmp = NYVert3Df(0, 0, 0);
+						intersect = tmp;
+
+						//ABCD
+						if (planeIntersect(start, end, A, B, C, tmp))
+						{
+							if ((tmp - start).getSize() < (intersect - start).getSize())
+							{
+								intersect = tmp;
+							}
+						}
+
+						//BGHC
+						if (planeIntersect(start, end, B, G, H, tmp))
+						{
+							if ((tmp - start).getSize() < (intersect - start).getSize())
+							{
+								intersect = tmp;
+							}
+						}
+
+						//GFEH
+						if (planeIntersect(start, end, G, F, E, tmp))
+						{
+							if ((tmp - start).getSize() < (intersect - start).getSize())
+							{
+								intersect = tmp;
+							}
+						}
+
+						//FADE
+						if (planeIntersect(start, end, F, A, D, tmp))
+						{
+							if ((tmp - start).getSize() < (intersect - start).getSize())
+							{
+								intersect = tmp;
+							}
+						}
+
+						//DCHE
+						if (planeIntersect(start, end, D, C, H, tmp))
+						{
+							if ((tmp - start).getSize() < (intersect - start).getSize())
+							{
+								intersect = tmp;
+							}
+						}
+
+						//ABGF
+						if (planeIntersect(start, end, A, B, G, tmp))
+						{
+							if ((tmp - start).getSize() < (intersect - start).getSize())
+							{
+								intersect = tmp;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return (intersect.X != 0 || intersect.Y != 0 || intersect.Z != 0);
 	}
 };
 

@@ -43,7 +43,7 @@ class NYChunk
 	public :
 		static const int X_CHUNK_SIZE = 16;
 		static const int Y_CHUNK_SIZE = 16;
-		static const int Z_CHUNK_SIZE = 128;
+		static const int Z_CHUNK_SIZE = 16;
 		NYCube _Cubes[X_CHUNK_SIZE][Y_CHUNK_SIZE][Z_CHUNK_SIZE]; ///< Cubes contenus dans le chunk
 
 		GLuint _BufWorld; ///< Identifiant du VBO pour le monde

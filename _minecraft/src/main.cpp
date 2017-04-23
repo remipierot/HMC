@@ -20,8 +20,9 @@
 #include "world.h"
 #include "avatar.h"
 
+#include "my_physics.h"
+
 #define ASKED_MODE true
-#define ZQSD_MODE false
 #define FACE_NORMALS true
 #define VERTEX_NORMALS false
 #define DAY_LENGTH_IN_MS 20000
@@ -36,12 +37,13 @@ enum KB_PRESSED
 	Q_KEY,
 	S_KEY,
 	D_KEY,
-	CTRL_KEY
+	CTRL_KEY,
+	SPACE_KEY
 };
 
 void setLights();
 
-bool kb_inputs[5];
+bool kb_inputs[6];
 
 NYWorld * g_world;
 NYAvatar * g_avatar;
@@ -126,19 +128,10 @@ void update(void)
 	g_avatar->recule = kb_inputs[S_KEY];
 	g_avatar->droite = kb_inputs[D_KEY];
 	g_avatar->gauche = kb_inputs[Q_KEY];
+	g_avatar->Crouch = kb_inputs[CTRL_KEY];
+	g_avatar->Jump = kb_inputs[SPACE_KEY];
 	g_avatar->update(elapsed);
-
-	//XY movement if ZQSD_MODE
-	if (movement_mode == ZQSD_MODE && (kb_inputs[Z_KEY] || kb_inputs[Q_KEY] || kb_inputs[S_KEY] || kb_inputs[D_KEY]))
-	{
-		g_renderer->_Camera->move(
-			NYVert3Df(
-				kb_inputs[Z_KEY] - kb_inputs[S_KEY],
-				kb_inputs[D_KEY] - kb_inputs[Q_KEY],
-				0
-			) * elapsed * movement_speed
-		);
-	}
+	g_avatar->Cam->moveTo(g_avatar->Position + NYVert3Df(0, 0, g_avatar->Height/4.0f));
 
 	//Time of day
 	daytime += (NYRenderer::_DeltaTime * 1000); 
@@ -153,137 +146,6 @@ void update(void)
 
 	//Rendu
 	g_renderer->render(elapsed);
-}
-
-void coloredCube(bool normal_mode)
-{
-	GLfloat whiteSpecularMaterial[] = { 0.3, 0.3, 0.3, 1.0 };
-	glMaterialfv(GL_FRONT, GL_SPECULAR, whiteSpecularMaterial);
-	GLfloat mShininess = 100;
-	glMaterialf(GL_FRONT, GL_SHININESS, mShininess);
-
-	glBegin(GL_QUADS);
-
-	GLfloat redDiffuse[] = { 0.7f, 0, 0, 1};
-	GLfloat greenDiffuse[] = { 0, 0.7f, 0, 1 };
-	GLfloat blueDiffuse[] = { 0, 0, 0.7f, 1 };
-
-	GLfloat redAmbient[] = { 0.4f, 0, 0, 1 };
-	GLfloat greenAmbient[] = { 0, 0.4f, 0, 1 };
-	GLfloat blueAmbient[] = { 0, 0, 0.4f, 1 };
-
-	// Vertices coordinates
-	NYVert3Df points[] = 
-	{ 
-		NYVert3Df(-1, -1, -1),
-		NYVert3Df(-1, -1, 1),
-		NYVert3Df(-1, 1, -1),
-		NYVert3Df(-1, 1, 1),
-		NYVert3Df(1, -1, -1),
-		NYVert3Df(1, -1, 1),
-		NYVert3Df(1, 1, -1),
-		NYVert3Df(1, 1, 1)
-	};
-
-	// Index of vertices composing the faces
-	NYVert4Df faces[] =
-	{
-		NYVert4Df(0, 4, 5, 1),
-		NYVert4Df(2, 3, 7, 6),
-		NYVert4Df(4, 6, 7, 5),
-		NYVert4Df(0, 1, 3, 2),
-		NYVert4Df(1, 5, 7, 3),
-		NYVert4Df(0, 2, 6, 4)
-	};
-
-	// Normals of faces
-	NYVert3Df facesNormals[] =
-	{
-		NYVert3Df(0, -1, 0),
-		NYVert3Df(0, 1, 0),
-		NYVert3Df(1, 0, 0),
-		NYVert3Df(-1, 0, 0),
-		NYVert3Df(0, 0, 1),
-		NYVert3Df(0, 0, -1)
-	};
-
-	// Normals of vertices
-	NYVert3Df pointsNormals[] =
-	{
-		points[0] / 3.0f,
-		points[1] / 3.0f,
-		points[2] / 3.0f,
-		points[3] / 3.0f,
-		points[4] / 3.0f,
-		points[5] / 3.0f,
-		points[6] / 3.0f,
-		points[7] / 3.0f
-	};
-
-	int pointIndex = 0;
-	for (int currFace = 0; currFace < 6; currFace++)
-	{
-		if (currFace < 2)
-		{
-			glMaterialfv(GL_FRONT, GL_DIFFUSE, greenDiffuse);
-			glMaterialfv(GL_FRONT, GL_AMBIENT, greenAmbient);
-		}
-		else if (currFace < 4)
-		{
-			glMaterialfv(GL_FRONT, GL_DIFFUSE, redDiffuse);
-			glMaterialfv(GL_FRONT, GL_AMBIENT, redAmbient);
-		}
-		else
-		{
-			glMaterialfv(GL_FRONT, GL_DIFFUSE, blueDiffuse);
-			glMaterialfv(GL_FRONT, GL_AMBIENT, blueAmbient);
-		}
-
-		if (normal_mode == FACE_NORMALS)
-		{
-			glNormal3f(
-				facesNormals[currFace].X,
-				facesNormals[currFace].Y,
-				facesNormals[currFace].Z
-			);
-		}
-
-		for (int currPoint = 0; currPoint < 4; currPoint++)
-		{
-			switch (currPoint)
-			{
-				case 0 :
-					pointIndex = faces[currFace].X;
-					break;
-				case 1:
-					pointIndex = faces[currFace].Y;
-					break;
-				case 2:
-					pointIndex = faces[currFace].Z;
-					break;
-				case 3:
-					pointIndex = faces[currFace].T;
-					break;
-			}
-
-			if (normal_mode == VERTEX_NORMALS)
-			{
-				glNormal3f(
-					pointsNormals[pointIndex].X,
-					pointsNormals[pointIndex].Y,
-					pointsNormals[pointIndex].Z
-				);
-			}
-
-			glVertex3f(
-				points[pointIndex].X, 
-				points[pointIndex].Y, 
-				points[pointIndex].Z
-			);
-		}
-	}
-
-	glEnd();
 }
 
 void coloredSun()
@@ -330,6 +192,62 @@ void renderObjects(void)
 	glVertex3d(0,0,10000);
 	glEnd();
 
+	/*
+	glBegin(GL_LINES);
+	glColor3d(1, 1, 1);
+
+	NYVert3Df start = NYVert3Df(1000, 500, 0);
+	NYVert3Df end = NYVert3Df(1000, 500, 1000);
+	NYVert3Df planePoint1 = NYVert3Df(0, 0, 500);
+	NYVert3Df planePoint2 = NYVert3Df(1000, 1000, 500);
+	NYVert3Df planePoint3= NYVert3Df(2000, 0, 500);
+	NYVert3Df* intersect = new NYVert3Df(0, 0, 0);
+
+	glVertex3d(planePoint1.X, planePoint1.Y, planePoint1.Z);
+	glVertex3d(planePoint2.X, planePoint2.Y, planePoint2.Z);
+	glVertex3d(planePoint2.X, planePoint2.Y, planePoint2.Z);
+	glVertex3d(planePoint3.X, planePoint3.Y, planePoint3.Z);
+	glVertex3d(planePoint3.X, planePoint3.Y, planePoint3.Z);
+	glVertex3d(planePoint1.X, planePoint1.Y, planePoint1.Z);
+
+	glColor3d(0, 0, 0);
+	glVertex3d(start.X, start.Y, start.Z);
+	glVertex3d(end.X, end.Y, end.Z);
+	glEnd();
+
+	if (planeIntersect(start, end, planePoint1, planePoint2, planePoint3, intersect))
+	{
+		glPushMatrix();
+		glTranslatef(intersect->X, intersect->Y, intersect->Z);
+		glutSolidSphere(100, 50, 50);
+		glPopMatrix();
+	}
+	*/
+
+	NYVert3Df start = g_avatar->Position;
+	NYVert3Df end = g_avatar->Position + g_avatar->Cam->_Direction * NYCube::CUBE_SIZE * g_avatar->rayLength;
+	NYVert3Df intersect;
+	int x, y, z;
+
+	/*
+	if (g_world->getRayCollision(start, end, intersect, x, y, z))
+	{
+		glPushMatrix();
+		glTranslatef(intersect.X, intersect.Y, intersect.Z);
+		glutSolidSphere(2, 50, 50);
+		glPopMatrix();
+	}
+	*/
+
+
+	if (g_world->cubeIntersect(start, end, intersect))
+	{
+		glPushMatrix();
+		glTranslatef(intersect.X, intersect.Y, intersect.Z);
+		glutSolidSphere(2, 50, 50);
+		glPopMatrix();
+	}
+
 	setLights();
 	glPushMatrix();
 	glTranslatef(sun_pos.X, sun_pos.Y, sun_pos.Z);
@@ -339,6 +257,10 @@ void renderObjects(void)
 	glPushMatrix();
 	g_world->render_world_vbo();
 	//g_world->render_world_old_school();
+	glPopMatrix();
+
+	glPushMatrix();
+	g_avatar->render();
 	glPopMatrix();
 }
 
@@ -442,6 +364,9 @@ void keyboardDownFunction(unsigned char key, int p1, int p2)
 		case 'd':
 			kb_inputs[D_KEY] = true;
 			break;
+		case ' ':
+			kb_inputs[SPACE_KEY] = true;
+			break;
 		case 'f':
 			if (!g_fullscreen) {
 				glutFullScreen();
@@ -494,6 +419,9 @@ void keyboardUpFunction(unsigned char key, int p1, int p2)
 		case 'd':
 			kb_inputs[D_KEY] = false;
 			break;
+		case ' ':
+			kb_inputs[SPACE_KEY] = false;
+			break;
 	}
 }
 
@@ -539,13 +467,8 @@ void mouseMoveFunction(int x, int y, bool pressed)
 	//Head orientation (no matter the movement_mode)
 	if (capture_mouse)
 	{
-		g_avatar->rotate(x / 500.0f);
-		g_avatar->rotateUp(y / 500.0f);
-		/*
 		g_renderer->_Camera->rotate(x / 500.0f);
 		g_renderer->_Camera->rotateUp(y / 500.0f);
-		*/
-		
 	}
 
 	//XY movement when in ASKED_MODE
@@ -798,8 +721,8 @@ int main(int argc, char* argv[])
 	g_screen_manager->setActiveScreen(g_screen_jeu);
 	
 	//Init Camera
-	g_renderer->_Camera->setPosition(NYVert3Df(10,10,10));
-	g_renderer->_Camera->setLookAt(NYVert3Df(0,0,0));
+	//g_renderer->_Camera->setPosition(NYVert3Df(10,10,500));
+	//g_renderer->_Camera->setLookAt(NYVert3Df(0,0,0));
 
 	//Fin init moteur
 
@@ -819,7 +742,6 @@ int main(int argc, char* argv[])
 	g_world->init_world();
 
 	g_avatar = new NYAvatar(g_renderer->_Camera, g_world);
-	g_avatar->fly = true;
 
 	glutMainLoop(); 
 
