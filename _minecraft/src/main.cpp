@@ -192,55 +192,12 @@ void renderObjects(void)
 	glVertex3d(0,0,10000);
 	glEnd();
 
-	/*
-	glBegin(GL_LINES);
-	glColor3d(1, 1, 1);
-
-	NYVert3Df start = NYVert3Df(1000, 500, 0);
-	NYVert3Df end = NYVert3Df(1000, 500, 1000);
-	NYVert3Df planePoint1 = NYVert3Df(0, 0, 500);
-	NYVert3Df planePoint2 = NYVert3Df(1000, 1000, 500);
-	NYVert3Df planePoint3= NYVert3Df(2000, 0, 500);
-	NYVert3Df* intersect = new NYVert3Df(0, 0, 0);
-
-	glVertex3d(planePoint1.X, planePoint1.Y, planePoint1.Z);
-	glVertex3d(planePoint2.X, planePoint2.Y, planePoint2.Z);
-	glVertex3d(planePoint2.X, planePoint2.Y, planePoint2.Z);
-	glVertex3d(planePoint3.X, planePoint3.Y, planePoint3.Z);
-	glVertex3d(planePoint3.X, planePoint3.Y, planePoint3.Z);
-	glVertex3d(planePoint1.X, planePoint1.Y, planePoint1.Z);
-
-	glColor3d(0, 0, 0);
-	glVertex3d(start.X, start.Y, start.Z);
-	glVertex3d(end.X, end.Y, end.Z);
-	glEnd();
-
-	if (planeIntersect(start, end, planePoint1, planePoint2, planePoint3, intersect))
-	{
-		glPushMatrix();
-		glTranslatef(intersect->X, intersect->Y, intersect->Z);
-		glutSolidSphere(100, 50, 50);
-		glPopMatrix();
-	}
-	*/
-
 	NYVert3Df start = g_avatar->Position;
 	NYVert3Df end = g_avatar->Position + g_avatar->Cam->_Direction * NYCube::CUBE_SIZE * g_avatar->rayLength;
 	NYVert3Df intersect;
 	int x, y, z;
 
-	/*
 	if (g_world->getRayCollision(start, end, intersect, x, y, z))
-	{
-		glPushMatrix();
-		glTranslatef(intersect.X, intersect.Y, intersect.Z);
-		glutSolidSphere(2, 50, 50);
-		glPopMatrix();
-	}
-	*/
-
-
-	if (g_world->cubeIntersect(start, end, intersect))
 	{
 		glPushMatrix();
 		glTranslatef(intersect.X, intersect.Y, intersect.Z);
