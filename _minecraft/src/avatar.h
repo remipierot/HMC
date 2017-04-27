@@ -11,6 +11,7 @@ class NYAvatar
 public:
 	NYVert3Df Position;
 	NYVert3Df Speed;
+	btRigidBody* Balle;
 
 	float rayLength = 3.0f;
 
@@ -50,6 +51,7 @@ public:
 		InWater = false;
 		Crouch = false;
 		Run = false;
+		Balle = NULL;
 	}
 
 
@@ -63,11 +65,12 @@ public:
 		glVertex3d(Position.X, Position.Y, Position.Z);
 		glVertex3d(Position.X + fwd.X, Position.Y + fwd.Y, Position.Z + fwd.Z);
 		glEnd();
+
+		renderBalle();
 	}
 
 	void update(float elapsed)
 	{
-
 		//Par defaut, on applique la gravité (-100 sur Z), la moitie si dans l eau
 		NYVert3Df force = NYVert3Df(0, 0, -1) * 100.0f;
 		if (InWater)
@@ -113,7 +116,7 @@ public:
 		//On applique le jump
 		if (Jump)
 		{
-			force += NYVert3Df(0, 0, 1) * 25.0f / elapsed; //(impulsion, pas fonction du temps)
+			force += NYVert3Df(0, 0, 1) * 5.0f / elapsed; //(impulsion, pas fonction du temps)
 			Jump = false;
 		}
 
@@ -216,6 +219,56 @@ public:
 	float nysign(float val)
 	{
 		return (val < 0) ? -1 : +1;
+	}
+
+	/**
+	* Effectue le rendu de la balle. Il faut récupérer sa position et rotation
+	* dans le moteur physique et rendre un sphère de bonne taille à la bonne position / rotation.
+	*/
+	void renderBalle(void)
+	{
+		if (Balle)
+		{
+			btMotionState * state = Balle->getMotionState();
+			btTransform t;
+			state->getWorldTransform(t);
+			btScalar m[16];
+			t.getOpenGLMatrix(m);
+
+			glEnable(GL_LIGHTING);
+			glEnable(GL_COLOR_MATERIAL);
+			glColor3d(0.2, 0.2, 0.2);
+			glPushMatrix();
+			glMultMatrixf(m);
+			glutSolidSphere(Width, 10, 10);
+			glPopMatrix();
+		}
+	}
+
+	/**
+	* Créer une nouvelle balle et l'ajoute au moteur. Detruire la balle
+	* si elle existe dejà
+	*/
+	void shoot(NYVert3Df & direction)
+	{
+		if (Balle)
+			destroyShoot();
+		Balle = NYBasicPhysicEngine::getInstance()->addSphereObject(true, Width, Position, 10.0);
+		btVector3 impulse(direction.X * 500, direction.Y * 500, direction.Z * 500);
+		Balle->applyImpulse(impulse, btVector3());
+		NYBasicPhysicEngine::getInstance()->setCollisionReportOnBody(Balle);
+	}
+
+	/**
+	* Permet de détruire la balle en cours, si elle existe. La retire du moteur physique
+	*/
+	void destroyShoot()
+	{
+		if (Balle)
+		{
+			NYBasicPhysicEngine::getInstance()->removeObject(Balle);
+			SAFEDELETE(Balle);
+		}
 	}
 };
 

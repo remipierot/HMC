@@ -15,6 +15,7 @@
 #include "engine/render/renderer.h"
 #include "engine/gui/screen.h"
 #include "engine/gui/screen_manager.h"
+#include "basic_physic_engine.h"
 
 //Pour avoir le monde
 #include "world.h"
@@ -105,6 +106,9 @@ void update(void)
 	{
 		glutWarpPointer(glutGet(GLUT_WINDOW_WIDTH) / 2.0f, glutGet(GLUT_WINDOW_HEIGHT) / 2.0f);
 	}
+
+	//Update du moteur physique
+	NYBasicPhysicEngine::getInstance()->update(elapsed);
 
 	//Calcul des fps
 	g_elapsed_fps += elapsed;
@@ -356,7 +360,9 @@ void keyboardDownFunction(unsigned char key, int p1, int p2)
 			glutDestroyWindow(g_main_window_id);
 			exit(0);
 			break;
-
+		case 'b':
+			g_avatar->shoot(g_renderer->_Camera->_Direction);
+			break;
 	}
 }
 
@@ -456,6 +462,29 @@ void clickBtnCloseParam (GUIBouton * bouton)
 }
 
 /**
+* Collisions
+*/
+bool collisionReport(btManifoldPoint& cp, void* body0, void* body1)
+{
+	//Log::log(Log::USER_INFO,"Collision");
+	if (body0 == g_avatar->Balle || body1 == g_avatar->Balle)
+	{
+		//Log::log(Log::USER_INFO,"Collision avec la balle");
+
+		//On declence l'explosion
+		btTransform t;
+		g_avatar->Balle->getMotionState()->getWorldTransform(t);
+
+		g_world->createExplosion(NYVert3Df(t.getOrigin().x(), t.getOrigin().y(), t.getOrigin().z()), NYCube::CUBE_SIZE * 5);
+
+		g_avatar->destroyShoot();
+
+
+	}
+	return false;
+}
+
+/**
   * POINT D'ENTREE PRINCIPAL
   **/
 int main(int argc, char* argv[])
@@ -536,6 +565,11 @@ int main(int argc, char* argv[])
 	glutMotionFunc(mouseMoveActiveFunction);
 	glutPassiveMotionFunc(mouseMovePassiveFunction);
 	glutIgnoreKeyRepeat(1);
+
+	//Inclure avant le moteur physique basique
+	//Init physique
+	NYBasicPhysicEngine::getInstance()->initialisation(NYVert3Df(0, 0, -9));
+	NYBasicPhysicEngine::getInstance()->setCollisionReportFunction(collisionReport);
 
 	//Initialisation du renderer
 	g_renderer = NYRenderer::getInstance();
@@ -687,18 +721,20 @@ int main(int argc, char* argv[])
 	//Hide cursor
 	glutSetCursor(GLUT_CURSOR_NONE);
 
-	//Init Timer
-	g_timer = new NYTimer();
-	
-	//On start
-	g_timer->start();
-
 	//A la fin du main, on genere un monde
 	g_world = new NYWorld();
 	g_world->_FacteurGeneration = 5;
 	g_world->init_world();
 
 	g_avatar = new NYAvatar(g_renderer->_Camera, g_world);
+
+	//Init Timer
+	g_timer = new NYTimer();
+	
+	//On start
+	g_timer->start();
+
+
 
 	glutMainLoop(); 
 

@@ -2,6 +2,7 @@
 
 #include "engine/render/renderer.h"
 #include "cube.h"
+#include "basic_physic_engine.h"
 
 enum Color
 {
@@ -47,28 +48,37 @@ class NYChunk
 		NYCube _Cubes[X_CHUNK_SIZE][Y_CHUNK_SIZE][Z_CHUNK_SIZE]; ///< Cubes contenus dans le chunk
 
 		GLuint _BufWorld; ///< Identifiant du VBO pour le monde
-		
-		static float _WorldVert[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE*3*4*6]; ///< Buffer pour les sommets
-		static float _WorldCols[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE*3*4*6]; ///< Buffer pour les couleurs
-		static float _WorldNorm[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE*3*4*6]; ///< Buffer pour les normales
+
+		static float _WorldVert[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE * 3 * 3 * 6 * 2]; ///< Buffer pour les sommets
+		static float _WorldCols[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE * 3 * 3 * 6 * 2]; ///< Buffer pour les couleurs
+		static float _WorldNorm[X_CHUNK_SIZE*Y_CHUNK_SIZE*Z_CHUNK_SIZE * 3 * 3 * 6 * 2]; ///< Buffer pour les normales
+
 
 		static const int SIZE_VERTICE = 3 * sizeof(float); ///< Taille en octets d'un vertex dans le VBO
 		static const int SIZE_COLOR = 3 * sizeof(float);  ///< Taille d'une couleur dans le VBO
 		static const int SIZE_NORMAL = 3 * sizeof(float);  ///< Taille d'une normale dans le VBO
-		static const int DELTA_COLOR_FACTOR = 10;
-		
+
 		int _NbVertices; ///< Nombre de vertices dans le VBO (on ne met que les faces visibles)
 
 		NYChunk * Voisins[6];
-		
-		NYChunk()
+		btRigidBody * _Body;
+
+		int _XPos, _YPos, _ZPos; ///< Position du chunk dans le monde
+		bool _UpToDate;
+
+		NYChunk(int x, int y, int z)
 		{
 			_NbVertices = 0;
 			_BufWorld = 0;
-			memset(Voisins,0x00,sizeof(void*) * 6);
+			memset(Voisins, 0x00, sizeof(void*) * 6);
+			_XPos = x;
+			_YPos = y;
+			_ZPos = z;
+			_UpToDate = false;
+			_Body = NULL;
 		}
 
-		void setVoisins(NYChunk * xprev, NYChunk * xnext,NYChunk * yprev,NYChunk * ynext,NYChunk * zprev,NYChunk * znext)
+		void setVoisins(NYChunk * xprev, NYChunk * xnext, NYChunk * yprev, NYChunk * ynext, NYChunk * zprev, NYChunk * znext)
 		{
 			Voisins[0] = xprev;
 			Voisins[1] = xnext;
@@ -79,13 +89,13 @@ class NYChunk
 		}
 
 		/**
-		  * Raz de l'état des cubes (a draw = false)
-		  */
+		* Raz de l'état des cubes (a draw = false)
+		*/
 		void reset(void)
 		{
-			for(int x=0;x<X_CHUNK_SIZE;x++)
-				for(int y=0;y<Y_CHUNK_SIZE;y++)
-					for(int z=0;z<Z_CHUNK_SIZE;z++)
+			for (int x = 0; x<X_CHUNK_SIZE; x++)
+				for (int y = 0; y<Y_CHUNK_SIZE; y++)
+					for (int z = 0; z<Z_CHUNK_SIZE; z++)
 					{
 						_Cubes[x][y][z]._Draw = true;
 						_Cubes[x][y][z]._Type = CUBE_AIR;
@@ -95,169 +105,569 @@ class NYChunk
 		//On met le chunk ddans son VBO
 		void toVbo(void)
 		{
-			NYCube c;
-			float color[3];
-			float tmp_color[3];
-			float pos[3];
-			float* pointers[] = {_WorldVert, _WorldCols, _WorldNorm};
+			//On utilise les buffers temporaires pour préparer nos datas
+			float * ptVert = _WorldVert;
+			float * ptCols = _WorldCols;
+			float * ptNorm = _WorldNorm;
 			_NbVertices = 0;
 
-			for (int x = 0; x < X_CHUNK_SIZE; x++)
+			//On parcourt tous nos cubes
+			for (int x = 0; x<X_CHUNK_SIZE; x++)
 			{
-				for (int y = 0; y < Y_CHUNK_SIZE; y++)
+				for (int y = 0; y<Y_CHUNK_SIZE; y++)
 				{
-					for (int z = 0; z < Z_CHUNK_SIZE; z++)
+					for (int z = 0; z<Z_CHUNK_SIZE; z++)
 					{
-						c = _Cubes[x][y][z];
-						if (c._Draw && c.isSolid())
+						if (_Cubes[x][y][z]._Draw && _Cubes[x][y][z]._Type != CUBE_AIR)
 						{
-							switch (c._Type)
+							float color[3];
+
+							switch (_Cubes[x][y][z]._Type)
 							{
-								case CUBE_HERBE:
-									color[R] = 81.0f / 255.0f;
-									color[G] = 124.0f / 255.0f;
-									color[B] = 30.0f / 255.0f;
-									break;
-								case CUBE_EAU:
-									color[R] = 40.0f / 255.0f;
-									color[G] = 56.0f / 255.0f;
-									color[B] = 219.0f / 255.0f;
-									break;
-								case CUBE_TERRE:
-									color[R] = 118.0f / 255.0f;
-									color[G] = 77.0f / 255.0f;
-									color[B] = 43.0f / 255.0f;
-									break;
+							case CUBE_TERRE:
+								color[0] = 101.0f / 255.0f;
+								color[1] = 74.0f / 255.0f;
+								color[2] = 0.0f / 255.0f;
+								break;
+							case CUBE_HERBE:
+								color[0] = 1.0f / 255.0f;
+								color[1] = 112.0f / 255.0f;
+								color[2] = 12.0f / 255.0f;
+								break;
+							case CUBE_EAU:
+								color[0] = 0.0f / 255.0f;
+								color[1] = 48.0f / 255.0f;
+								color[2] = 255.0f / 255.0f;
+								break;
 							}
 
-							pos[X] = x * (float)NYCube::CUBE_SIZE;
-							pos[Y] = y * (float)NYCube::CUBE_SIZE;
-							pos[Z] = z * (float)NYCube::CUBE_SIZE;
+							//Position du cube (coin bas gauche face avant)
+							float xPos = x*(float)NYCube::CUBE_SIZE;
+							float yPos = y*(float)NYCube::CUBE_SIZE;
+							float zPos = z*(float)NYCube::CUBE_SIZE;
 
-							for (int face = 0; face <= BACK; face++)
+							NYCube * cubeXPrev = NULL;
+							NYCube * cubeXNext = NULL;
+							NYCube * cubeYPrev = NULL;
+							NYCube * cubeYNext = NULL;
+							NYCube * cubeZPrev = NULL;
+							NYCube * cubeZNext = NULL;
+
+							get_surrounding_cubes(
+								x, y, z,
+								&cubeXPrev, &cubeXNext,
+								&cubeYPrev, &cubeYNext,
+								&cubeZPrev, &cubeZNext);
+
+
+							//Premier QUAD (le z-)
+							if (cubeZPrev == NULL || cubeZPrev->isSolid() == false)
 							{
-								tmp_color[R] = color[R] + (randf() / DELTA_COLOR_FACTOR);
-								tmp_color[G] = color[G] + (randf() / DELTA_COLOR_FACTOR);
-								tmp_color[B] = color[B] + (randf() / DELTA_COLOR_FACTOR);
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
 
-								for (int triangle = 0; triangle < 2; triangle++)
-								{
-									for (int vertex = 0; vertex < 3; vertex++)
-									{
-										//X pos
-										*(pointers[VERTEX]) = pos[X];
-										if (
-											(face == RIGHT) ||
-											(triangle == 0 && vertex == 1 && (face == BOTTOM || face == BACK)) || 
-											(((triangle == 0 && vertex == 2) || (triangle == 1 && vertex == 0)) && face != RIGHT && face != LEFT) ||
-											(triangle == 1 && vertex == 1 && (face == FRONT || face == TOP))
-										)
-											*(pointers[VERTEX]) += NYCube::CUBE_SIZE;
-										pointers[VERTEX]++;
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
 
-										//Y pos
-										*(pointers[VERTEX]) = pos[Y];
-										if (
-											(face == TOP) ||
-											(triangle == 0 && vertex == 1 && (face == FRONT || face == RIGHT)) ||
-											(((triangle == 0 && vertex == 2) || (triangle == 1 && vertex == 0)) && face != TOP && face != BOTTOM) ||
-											(triangle == 1 && vertex == 1 && (face == LEFT || face == BACK))
-										)
-											*(pointers[VERTEX]) += NYCube::CUBE_SIZE;
-										pointers[VERTEX]++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
 
-										//Z pos
-										*(pointers[VERTEX]) = pos[Z];
-										if (
-											(face == BACK) ||
-											(triangle == 0 && vertex == 1 && (face == LEFT || face == TOP)) ||
-											(((triangle == 0 && vertex == 2) || (triangle == 1 && vertex == 0)) && face != FRONT && face != BACK) ||
-											(triangle == 1 && vertex == 1 && (face == RIGHT || face == BOTTOM))
-										)
-											*(pointers[VERTEX]) += NYCube::CUBE_SIZE;
-										pointers[VERTEX]++;
-										_NbVertices++;
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
 
-										*(pointers[COLOR]) = tmp_color[R];
-										pointers[COLOR]++;
-										*(pointers[COLOR]) = tmp_color[G];
-										pointers[COLOR]++;
-										*(pointers[COLOR]) = tmp_color[B];
-										pointers[COLOR]++;
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
 
-										*(pointers[NORMAL]) = (face == RIGHT) - (face == LEFT);
-										pointers[NORMAL]++;
-										*(pointers[NORMAL]) = (face == TOP) - (face == BOTTOM);
-										pointers[NORMAL]++;
-										*(pointers[NORMAL]) = (face == BACK) - (face == FRONT);
-										pointers[NORMAL]++;
-									}
-								}
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+							}
+
+
+
+							//Second QUAD (x+)
+							if (cubeXNext == NULL || cubeXNext->isSolid() == false)
+							{
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+							}
+
+							//Troisieme QUAD (x-)
+							if (cubeXPrev == NULL || cubeXPrev->isSolid() == false)
+							{
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+							}
+
+
+							//Quatrieme QUAD (y+)
+							if (cubeYNext == NULL || cubeYNext->isSolid() == false)
+							{
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+							}
+
+							//Cinquieme QUAD (y-)
+							if (cubeYPrev == NULL || cubeYPrev->isSolid() == false)
+							{
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = -1; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+							}
+
+							//Sixieme QUAD (z+)
+							if (cubeZNext == NULL || cubeZNext->isSolid() == false)
+							{
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+
+								*ptVert = xPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
+
+								*ptVert = xPos; ptVert++;
+								*ptVert = yPos + NYCube::CUBE_SIZE; ptVert++;
+								*ptVert = zPos + NYCube::CUBE_SIZE; ptVert++; _NbVertices++;
+
+								*ptCols = color[0] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[1] + (rand() % 100) / 2000.0f; ptCols++;
+								*ptCols = color[2] + (rand() % 100) / 2000.0f; ptCols++;
+
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 0; ptNorm++;
+								*ptNorm = 1; ptNorm++;
 							}
 						}
 					}
 				}
 			}
 
-			//On le detruit si il existe deja
 			if (_BufWorld != 0)
 				glDeleteBuffers(1, &_BufWorld);
 
-			//Genere un identifiant
 			glGenBuffers(1, &_BufWorld);
 
-			//On attache le VBO pour pouvoir le modifier
 			glBindBuffer(GL_ARRAY_BUFFER, _BufWorld);
 
-			//On reserve la quantite totale de datas (creation de la zone memoire, mais sans passer les données)
-			//Les tailles g_size* sont en octets, à vous de les calculer
-			glBufferData(
-				GL_ARRAY_BUFFER,
+			glBufferData(GL_ARRAY_BUFFER,
 				_NbVertices * SIZE_VERTICE +
 				_NbVertices * SIZE_COLOR +
 				_NbVertices * SIZE_NORMAL,
 				NULL,
-				GL_STREAM_DRAW
-			);
+				GL_STREAM_DRAW);
 
 			GLenum error = glGetError();
 
-			//On copie les vertices
-			glBufferSubData(
-				GL_ARRAY_BUFFER,
-				0, //Offset 0, on se place au début
-				_NbVertices * SIZE_VERTICE, //Taille en octets du buffer vertices
-				_WorldVert	//Datas
-			);
+			glBufferSubData(GL_ARRAY_BUFFER,
+				0,
+				_NbVertices * SIZE_VERTICE,
+				_WorldVert);
 
-			//Check error (la tester ensuite...)
 			error = glGetError();
 
-			//On copie les couleurs
-			glBufferSubData(
-				GL_ARRAY_BUFFER,
-				_NbVertices * SIZE_VERTICE, //Offset, on se place après les vertices
-				_NbVertices * SIZE_COLOR, //Taille en octets du buffer colors
-				_WorldCols	//Datas
-			);
+			glBufferSubData(GL_ARRAY_BUFFER,
+				_NbVertices * SIZE_VERTICE,
+				_NbVertices * SIZE_COLOR,
+				_WorldCols);
 
-			//Check error (la tester ensuite...)
 			error = glGetError();
 
-			//On copie les normales (a vous de déduire les params)
-			glBufferSubData(
-				GL_ARRAY_BUFFER,
-				_NbVertices * (SIZE_VERTICE + SIZE_COLOR),	//Offset, on se place après les colors
-				_NbVertices * SIZE_NORMAL,	//Taille en octets du buffer normals
-				_WorldNorm	//Datas
-			);
+			glBufferSubData(GL_ARRAY_BUFFER,
+				_NbVertices * SIZE_VERTICE +
+				_NbVertices * SIZE_COLOR,
+				_NbVertices * SIZE_NORMAL,
+				_WorldNorm);
 
-			//On debind le buffer pour eviter une modif accidentelle par le reste du code
+			error = glGetError();
+
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
+
 		}
 
 		void render(void)
 		{
+
 			glEnable(GL_COLOR_MATERIAL);
 			glEnable(GL_LIGHTING);
 
@@ -285,73 +695,153 @@ class NYChunk
 			glDisable(GL_COLOR_MATERIAL);
 			glDisable(GL_LIGHTING);
 		}
+		/**
+		* Met a jour la structure, à la fois pour le rendu et pour la physique
+		*/
+		void updateStructure(void)
+		{
+			disableHiddenCubes();
+			toVbo();
+			addToPhysic();
+			_UpToDate = true;
+		}
 
 		/**
-		  * On verifie si le cube peut être vu
-		  */
+		* Permet d'ajouter un chunk au moteur physique. utilise pour cela _WorldVert (qui est statique)
+		* et qui doit donc être généré avant. Cette fonction est donc appelée par updatestructure et
+		* reste privée
+		*/
+		void addToPhysic()
+		{
+			if (_Body != NULL)
+			{
+				NYBasicPhysicEngine::getInstance()->removeObject(_Body);
+				SAFEDELETE(_Body);
+			}
+
+			//Mise a jour du worldVert
+			if (_NbVertices > 0)
+			{
+				btGImpactMeshShape * mesh = NYBasicPhysicEngine::getInstance()->
+					calcTriMeshShape(_WorldVert, _NbVertices, 3 * sizeof(float));
+				_Body = NYBasicPhysicEngine::getInstance()->addTriMeshObject(false, mesh,
+					NYVert3Df(_XPos*NYChunk::X_CHUNK_SIZE*NYCube::CUBE_SIZE,
+						_YPos*NYChunk::Y_CHUNK_SIZE*NYCube::CUBE_SIZE,
+						_ZPos*NYChunk::Z_CHUNK_SIZE*NYCube::CUBE_SIZE), 0.0f);
+				NYBasicPhysicEngine::getInstance()->setCollisionReportOnBody(_Body);
+			}
+		}
+
+		/**
+		* On verifie si le cube peut être vu
+		*/
 		bool test_hidden(int x, int y, int z)
 		{
-			NYCube * cubeXPrev = NULL; 
-			NYCube * cubeXNext = NULL; 
-			NYCube * cubeYPrev = NULL; 
-			NYCube * cubeYNext = NULL; 
-			NYCube * cubeZPrev = NULL; 
-			NYCube * cubeZNext = NULL; 
+			NYCube * cubeXPrev = NULL;
+			NYCube * cubeXNext = NULL;
+			NYCube * cubeYPrev = NULL;
+			NYCube * cubeYNext = NULL;
+			NYCube * cubeZPrev = NULL;
+			NYCube * cubeZNext = NULL;
 
-			if(x == 0 && Voisins[0] != NULL)
-				cubeXPrev = &(Voisins[0]->_Cubes[X_CHUNK_SIZE-1][y][z]);
-			else if(x > 0)
-				cubeXPrev = &(_Cubes[x-1][y][z]);
+			if (x == 0 && Voisins[0] != NULL)
+				cubeXPrev = &(Voisins[0]->_Cubes[X_CHUNK_SIZE - 1][y][z]);
+			else if (x > 0)
+				cubeXPrev = &(_Cubes[x - 1][y][z]);
 
-			if(x == X_CHUNK_SIZE-1 && Voisins[1] != NULL)
+			if (x == X_CHUNK_SIZE - 1 && Voisins[1] != NULL)
 				cubeXNext = &(Voisins[1]->_Cubes[0][y][z]);
-			else if(x < X_CHUNK_SIZE-1)
-				cubeXNext = &(_Cubes[x+1][y][z]);
+			else if (x < X_CHUNK_SIZE - 1)
+				cubeXNext = &(_Cubes[x + 1][y][z]);
 
-			if(y == 0 && Voisins[2] != NULL)
-				cubeYPrev = &(Voisins[2]->_Cubes[x][Y_CHUNK_SIZE-1][z]);
-			else if(y > 0)
-				cubeYPrev = &(_Cubes[x][y-1][z]);
+			if (y == 0 && Voisins[2] != NULL)
+				cubeYPrev = &(Voisins[2]->_Cubes[x][Y_CHUNK_SIZE - 1][z]);
+			else if (y > 0)
+				cubeYPrev = &(_Cubes[x][y - 1][z]);
 
-			if(y == Y_CHUNK_SIZE-1 && Voisins[3] != NULL)
+			if (y == Y_CHUNK_SIZE - 1 && Voisins[3] != NULL)
 				cubeYNext = &(Voisins[3]->_Cubes[x][0][z]);
-			else if(y < Y_CHUNK_SIZE-1)
-				cubeYNext = &(_Cubes[x][y+1][z]);
+			else if (y < Y_CHUNK_SIZE - 1)
+				cubeYNext = &(_Cubes[x][y + 1][z]);
 
-			if(z == 0 && Voisins[4] != NULL)
-				cubeZPrev = &(Voisins[4]->_Cubes[x][y][Z_CHUNK_SIZE-1]);
-			else if(z > 0)
-				cubeZPrev = &(_Cubes[x][y][z-1]);
+			if (z == 0 && Voisins[4] != NULL)
+				cubeZPrev = &(Voisins[4]->_Cubes[x][y][Z_CHUNK_SIZE - 1]);
+			else if (z > 0)
+				cubeZPrev = &(_Cubes[x][y][z - 1]);
 
-			if(z == Z_CHUNK_SIZE-1 && Voisins[5] != NULL)
+			if (z == Z_CHUNK_SIZE - 1 && Voisins[5] != NULL)
 				cubeZNext = &(Voisins[5]->_Cubes[x][y][0]);
-			else if(z < Z_CHUNK_SIZE-1)
-				cubeZNext = &(_Cubes[x][y][z+1]);
+			else if (z < Z_CHUNK_SIZE - 1)
+				cubeZNext = &(_Cubes[x][y][z + 1]);
 
-			if( cubeXPrev == NULL || cubeXNext == NULL ||
+			if (cubeXPrev == NULL || cubeXNext == NULL ||
 				cubeYPrev == NULL || cubeYNext == NULL ||
-				cubeZPrev == NULL || cubeZNext == NULL )
+				cubeZPrev == NULL || cubeZNext == NULL)
 				return false;
 
-			if( cubeXPrev->isSolid() == true && //droite
+			if (cubeXPrev->isSolid() == true && //droite
 				cubeXNext->isSolid() == true && //gauche
 				cubeYPrev->isSolid() == true && //haut
 				cubeYNext->isSolid() == true && //bas
 				cubeZPrev->isSolid() == true && //devant
-				cubeZNext->isSolid() == true )  //derriere
+				cubeZNext->isSolid() == true)  //derriere
 				return true;
 			return false;
 		}
 
 		void disableHiddenCubes(void)
 		{
-			for(int x=0;x<X_CHUNK_SIZE;x++)
-				for(int y=0;y<Y_CHUNK_SIZE;y++)
-					for(int z=0;z<Z_CHUNK_SIZE;z++)
+			for (int x = 0; x<X_CHUNK_SIZE; x++)
+				for (int y = 0; y<Y_CHUNK_SIZE; y++)
+					for (int z = 0; z<Z_CHUNK_SIZE; z++)
 					{
 						_Cubes[x][y][z]._Draw = true;
-						if(test_hidden(x,y,z))
+						if (test_hidden(x, y, z))
 							_Cubes[x][y][z]._Draw = false;
 					}
 		}
+
+		void get_surrounding_cubes(int x, int y, int z, NYCube ** cubeXPrev, NYCube ** cubeXNext,
+			NYCube ** cubeYPrev, NYCube ** cubeYNext,
+			NYCube ** cubeZPrev, NYCube ** cubeZNext)
+		{
+
+			*cubeXPrev = NULL;
+			*cubeXNext = NULL;
+			*cubeYPrev = NULL;
+			*cubeYNext = NULL;
+			*cubeZPrev = NULL;
+			*cubeZNext = NULL;
+
+			if (x == 0 && Voisins[0] != NULL)
+				*cubeXPrev = &(Voisins[0]->_Cubes[X_CHUNK_SIZE - 1][y][z]);
+			else if (x > 0)
+				*cubeXPrev = &(_Cubes[x - 1][y][z]);
+
+			if (x == X_CHUNK_SIZE - 1 && Voisins[1] != NULL)
+				*cubeXNext = &(Voisins[1]->_Cubes[0][y][z]);
+			else if (x < X_CHUNK_SIZE - 1)
+				*cubeXNext = &(_Cubes[x + 1][y][z]);
+
+			if (y == 0 && Voisins[2] != NULL)
+				*cubeYPrev = &(Voisins[2]->_Cubes[x][Y_CHUNK_SIZE - 1][z]);
+			else if (y > 0)
+				*cubeYPrev = &(_Cubes[x][y - 1][z]);
+
+			if (y == Y_CHUNK_SIZE - 1 && Voisins[3] != NULL)
+				*cubeYNext = &(Voisins[3]->_Cubes[x][0][z]);
+			else if (y < Y_CHUNK_SIZE - 1)
+				*cubeYNext = &(_Cubes[x][y + 1][z]);
+
+			if (z == 0 && Voisins[4] != NULL)
+				*cubeZPrev = &(Voisins[4]->_Cubes[x][y][Z_CHUNK_SIZE - 1]);
+			else if (z > 0)
+				*cubeZPrev = &(_Cubes[x][y][z - 1]);
+
+			if (z == Z_CHUNK_SIZE - 1 && Voisins[5] != NULL)
+				*cubeZNext = &(Voisins[5]->_Cubes[x][y][0]);
+			else if (z < Z_CHUNK_SIZE - 1)
+				*cubeZNext = &(_Cubes[x][y][z + 1]);
+		}
+
 };
