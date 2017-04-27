@@ -7,16 +7,16 @@ uniform sampler2D TexDepth;
 uniform float screen_width;
 uniform float screen_height;
 uniform float slider_6;
-uniform vec3 cam_pos; //Position de la camera
-uniform vec3 light_pos; //Position du soleil
-uniform mat4 prev_V; //matrice vue de la passe 4
-uniform mat4 prev_P; //matrice projection de la passe 4
-uniform mat4 V_light; //Matrice vue de la lumière, utilisée lors du rendu de la shadow map
-uniform mat4 P_light; //Matrice projection de la lumière, utilisée lors du rendu de la shadow map
-uniform vec4 bg_color; //Couleur du fond (ciel)
+uniform vec3 cam_pos;
+uniform vec3 light_pos;
+uniform mat4 prev_V; 
+uniform mat4 prev_P;
+uniform mat4 V_light;
+uniform mat4 P_light;
+uniform vec4 bg_color;
 uniform float elapsed;
 
-in vec4 gl_FragCoord; //que fragment shader, position du fragment à l'écran origine bas gauche, en pixels.
+in vec4 gl_FragCoord;
 
 float LinearizeDepth(float z)
 {
@@ -92,7 +92,6 @@ void main (void)
 
 	depth = LinearizeDepth(depth);
 
-	//DETECTION CONTOUR
 	float depthAccum = 0;
 	float distContour = 3;
 	float nb = 0;	
@@ -112,7 +111,6 @@ void main (void)
 	depthAccum = pow(clamp(depthAccum*30,0,1),1+2*slider_6);
 	
 	color.rgb -= vec3(depthAccum,depthAccum,depthAccum);
- 	//FIN CONTOUR
 
 	//Couleur du fond
 	if(depth >= 0.5)
@@ -162,7 +160,6 @@ void main (void)
 		color.rgb /= sqrt(Kt); 
 	}
 
-	//Correction gamma
 	color.rgb = sqrt(color.rgb);
 
 	gl_FragColor =  vec4(color.rgb,1.0);

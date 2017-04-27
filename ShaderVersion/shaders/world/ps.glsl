@@ -13,13 +13,13 @@ in vec2 uvModel;
 out vec4 p_color;
 
 uniform sampler2D TexCustom_1;
-uniform sampler2D TexReflec; //Texture de réflexion planaire au niveau des cubes d'eau
+uniform sampler2D TexReflec;
 
-uniform vec4 sun_color; // couleur du soleil
-uniform vec3 light_pos; //Position du soleil
+uniform vec4 sun_color;
+uniform vec3 light_pos;
 uniform float slider_0;
 uniform float elapsed;
-uniform vec3 cam_pos; //Position de la cameras
+uniform vec3 cam_pos;
 uniform float slider_5;
 uniform float screen_width;
 uniform float screen_height;
@@ -34,7 +34,6 @@ uniform int reflexionMapPass;
 #define CUBE_TERRE 1.0
 #define CUBE_EAU 4.0
 
-//Fait varier avec un sinus sur x en fonction du temps
 float noiseWater(vec2 v)
 {
 	return (-5 + ((sin(v.x/30.0 + elapsed*3.0) + (sin((v.x+v.y)/15 + elapsed*2.0)/2.0) + (sin((v.y)/7.5 + elapsed*1.2)/4.0))* 2));
@@ -43,21 +42,12 @@ float noiseWater(vec2 v)
 void main()
 {
 	vec3 camDir = normalize(cam_pos - worldPos.xyz);
-
-	vec3 lightDir = normalize(light_pos - cam_pos); //direction vers la lumière
-	//diffuse = normale.dirLight
-	//on fait un max pour eviter dabsorber la couleur
-
-
+	vec3 lightDir = normalize(light_pos - cam_pos);
 	vec3 goodNormal = normal;
 	vec4 goodColor = color;
 
-
-
-
 	if(type == CUBE_EAU)
 	{
-				//Pour calculer la normale sur l'eau perturbée*
 		vec4 A = worldPos;
 		vec4 B = worldPos + vec4(1,0,0,0);
 		vec4 C = worldPos + vec4(0,1,0,0);
@@ -75,8 +65,6 @@ void main()
 		vec4 normTexWater = texture2D( TexCustom_1 , uvModel + vec2(elapsed,0) );	
 		goodNormal = mix(goodNormal,normalize(normTexWater.xyz),slider_5/10.0);
 
-		//Reflection 
-		//Texture mirroir
 		vec2 uvReflec = vec2( (gl_FragCoord.x / screen_width) , (gl_FragCoord.y / screen_height) );
 		uvReflec.y = 1 - uvReflec.y;
 		uvReflec -= goodNormal.xy/15;
@@ -84,38 +72,29 @@ void main()
 
 		goodColor.xyz = mix(goodColor.xyz, colReflec, 0.5);
 
-
-
 		float fresnel = max(0,dot(goodNormal, camDir));
 		fresnel = 1 - fresnel;
 		fresnel = pow(fresnel,10 * slider_3);
 
 		goodColor.a = 0.3 * ( goodColor.a * fresnel ) + 0.7;
-
-
 	}
 
 	float diffuse = max(0,dot(goodNormal,lightDir));
 
-	//Specular = direction vers loeil + direction vers lumiere
 	vec3 halfVec = normalize(camDir + lightDir);
 	float specular = max(0,dot(halfVec, goodNormal));
 	specular = 10 * slider_2 * pow(specular,500* slider_1);
 
-	//toon shading sur le specular
-	if(specular > 0.6) specular = 1;
-	else if(specular > 0.1) specular = 0.4;
+	if(specular > 0.6) 
+		specular = 1;
+	else if(specular > 0.1) 
+		specular = 0.4;
 	
-
 	if(type != CUBE_EAU)
 		specular = 0;
 
-
-	p_color = (diffuse + (1.0-diffuse) * slider_0/4.0) * goodColor; // slider_0 ~= 0.6
+	p_color = (diffuse + (1.0-diffuse) * slider_0/4.0) * goodColor;
 	p_color += specular * sun_color;
-
-//	if(reflexionMapPass < 0.5)
-	//	p_color = vec4(colReflec.xyz,1);
 
 	p_color.a = goodColor.a;
 }
