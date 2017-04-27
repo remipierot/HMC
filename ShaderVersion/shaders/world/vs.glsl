@@ -10,6 +10,7 @@ uniform mat4 nmat;
 uniform float elapsed;
 uniform float slider_0;
 
+
 uniform int reflexionMapPass;
 uniform float water_height;
 
@@ -75,9 +76,8 @@ void main()
 
 
 
-	//float disXZ = length(posView.xz);
-	//posIn.z = posIn.z - pow(disXZ/(10 + 30 * slider_0),2);
-	//posIn.z = posIn.z + sin(posWorld.x/30.0 + elapsed) * 10.0; //Vague en fonction du temps / x
+	float disXZ = length(posView.xz);
+	posIn.z = posIn.z - pow(disXZ/(10 + 75 * slider_0),2);
 
 
 	type = int(vs_type_in);
